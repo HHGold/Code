@@ -1,0 +1,128 @@
+# ✈ 旅遊席次監控器
+
+自動監控 **雄獅旅遊** 與 **可樂旅遊** 的席次，席次有變動時立即透過 **Telegram** 通知。
+支援在 Telegram 直接輸入指令手動查詢。
+
+---
+
+## 監控目標
+
+| 旅遊業者 | 產品資訊 |
+|---------|---------|
+| 🦁 **雄獅旅遊** | 產品代碼：`26PI516CIA-T`，出發月份：2026/05 |
+| 🎡 **可樂旅遊** | 團號：`LAA061309BR6`，出發日：2026/06/13，台北出發 9 天 |
+
+---
+
+## 自動排程
+
+每天固定在以下時間自動執行查詢：
+
+| 時間 | 說明 |
+|------|------|
+| **10:00** | 早上自動查詢 |
+| **17:00** | 下午自動查詢 |
+
+每次查詢完成後會自動發送摘要到 Telegram，並顯示下次查詢時間。
+
+---
+
+## Telegram 指令（隨時手動查詢）
+
+直接在 Bot 對話框輸入：
+
+| 指令 | 效果 |
+|------|------|
+| `查旅遊` 或 `/check` | 🔄 **立刻查詢一次**，約 30 秒後回傳結果 |
+| `狀態` 或 `/status` | 📊 顯示上次查詢的快取席次（即時，不需等待） |
+| `說明` 或 `/help` | 📋 顯示指令說明 |
+
+> ✅ 手動查詢與自動排程**完全獨立**，可隨時觸發，不影響排程。
+
+---
+
+## Telegram 通知類型
+
+| 情境 | 訊息 |
+|------|------|
+| Container 啟動 | `✅ 旅遊席次監控器已啟動` + 排程說明 |
+| 定期報告（10:00 / 17:00） | `🔍 旅遊席次報告` + 兩個網站席次 + 下次查詢時間 |
+| **席次有變動** | `🚨 [雄獅] 席次變動！` 或 `🚨 [可樂] 可售席次變動！`（**立即發出**） |
+| 手動查詢結果 | `✅ 即時查詢完成` + 兩個網站席次 |
+| 發生錯誤 | `⚠️ 監控器發生錯誤` + 錯誤原因 |
+
+---
+
+## 檔案結構
+
+```
+TravelMonitor/
+├── monitor.py          # 監控主程式（需上傳到 NAS）
+├── docker-compose.yml  # Docker 服務配置（在 Container Manager 上傳）
+├── Dockerfile          # 備用：SSH 方式 Build 用（GUI 方式不需要）
+├── requirements.txt    # 備用：Python 套件清單（GUI 方式不需要）
+└── README.md           # 本說明文件
+```
+
+---
+
+## Synology NAS 部署步驟（Container Manager GUI）
+
+### 第 1 步：上傳 `monitor.py` 到 NAS
+
+打開 **File Station**，建立資料夾並上傳：
+
+```
+/volume1/docker/travel-monitor/
+    └── monitor.py      ← 上傳這個檔案
+```
+
+### 第 2 步：Container Manager → 專案 → 建立專案
+
+| 欄位 | 填入 |
+|------|------|
+| **專案名稱** | `travel-monitor` |
+| **路徑** | 點「設定路徑」→ 選 `/docker/travel-monitor` |
+| **來源** | 上傳 docker-compose.yml（預設） |
+| **檔案** | 瀏覽 → 選本機的 `docker-compose.yml` |
+
+### 第 3 步：點「下一步」→「完成」
+
+Container Manager 會自動：
+1. 從 Microsoft 下載 Playwright image（**約 1.5GB，需等幾分鐘**）
+2. 啟動 container，安裝必要套件
+3. 執行監控程式
+
+啟動後幾秒內，Telegram 就會收到啟動通知 📱
+
+---
+
+## 更新程式
+
+若 `monitor.py` 有更新，只需：
+1. 用 File Station 覆蓋 `/volume1/docker/travel-monitor/monitor.py`
+2. 在 Container Manager 重新啟動 container
+
+```
+Container Manager → 容器 → travel_monitor → 重新啟動
+```
+
+---
+
+## 常見問題
+
+**Q：可樂旅遊查詢比較慢？**
+> 正常現象。可樂旅遊有 Cloudflare 防護，需啟動 Chromium 瀏覽器模擬人工操作，每次約 20~30 秒。
+
+**Q：如何確認 container 正常運作？**
+> 輸入 `狀態` 看是否有回應，或等 10:00 / 17:00 的定期報告。也可在 Container Manager → 容器 → 日誌 查看。
+
+**Q：想改監控時間怎麼辦？**
+> 修改 `monitor.py` 第 23 行：
+> ```python
+> SCHEDULE_HOURS = [10, 17]   # 改這裡，例如改成 [9, 12, 18]
+> ```
+> 修改後重新上傳並重啟 container。
+
+**Q：想新增其他旅遊監控？**
+> 請洽開發者修改 `monitor.py`。

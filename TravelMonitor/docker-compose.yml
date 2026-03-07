@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  travel-monitor:
+    # 直接使用官方 Playwright image，不需要自己 Build
+    image: mcr.microsoft.com/playwright/python:v1.49.1-noble
+    container_name: travel_monitor
+    restart: unless-stopped
+
+    # 啟動時先安裝 requests，再執行監控程式
+    command: >
+      sh -c "pip install requests -q &&
+             python /app/monitor.py"
+
+    # 環境變數
+    environment:
+      - TELEGRAM_TOKEN=8787539119:AAG1MtwWqpyKAbytjMqbOzXLtqVfQ0LFSYg
+      - TELEGRAM_CHAT_ID=1044095870
+      - TZ=Asia/Taipei
+      # 排程時間固定於程式內：每天 10:00 / 17:00
+      - LION_NORM_GROUP_ID=5c25c87a-b6d7-4ecc-88b6-07a379bfcf6e
+      - LION_TARGET_GROUP_ID=26PI516CIA-T
+      - LION_DATE_START=2026-05-01
+      - LION_DATE_END=2026-05-31
+      - COLA_TOUR_CODE=LAA061309BR6
+      - COLA_TOUR_DATE=2026/06/13
+
+    # 掛載：monitor.py 從 NAS 讀入，/data 持久保存狀態
+    volumes:
+      - /volume1/docker/travel-monitor/monitor.py:/app/monitor.py:ro
+      - travel_monitor_data:/data
+
+    # 資源限制
+    mem_limit: 1g
+    shm_size: 512m
+
+    # 日誌
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  travel_monitor_data:
+    driver: local
