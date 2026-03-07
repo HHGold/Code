@@ -13,6 +13,8 @@ import requests
 import logging
 from datetime import datetime
 from pathlib import Path
+import traceback
+import html
 
 # ============================================================
 # 從環境變數讀取設定
@@ -37,19 +39,29 @@ COLA_URL       = f"https://tour.colatour.com.tw/itinerary?TourCode={COLA_TOUR_CO
 # 狀態存檔路徑
 STATE_FILE = Path("/data/state.json")
 
-# ============================================================
-# 日誌設定
-# ============================================================
+log_buffer    = []                  # 儲存最近的日誌供 Telegram 查詢
+
+class TelegramLogHandler(logging.Handler):
+    """自定義 Handler：將日誌同步存入 log_buffer"""
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            log_buffer.append(f"[{timestamp}] {msg}")
+            if len(log_buffer) > 20:
+                log_buffer.pop(0)
+        except Exception:
+            pass
+
+# 初始化日誌系統
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(message)s", # 簡便格式，因為快取會自帶時間
+    datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+log.addHandler(TelegramLogHandler())
 
-# ============================================================
-# 共用狀態（執行緒安全）
-# ============================================================
 state_lock    = threading.Lock()
 check_event   = threading.Event()   # 外部觸發立即查詢
 current_state = {}                  # 最新席次快取
@@ -61,7 +73,7 @@ def tg_request(method: str, **kwargs) -> dict | None:
     """呼叫 Telegram Bot API"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
     try:
-        r = requests.post(url, timeout=15, **kwargs)
+        r = requests.post(url, timeout=30, **kwargs)
         if r.status_code == 200:
             return r.json()
         log.warning(f"Telegram API {method} 失敗: {r.status_code} {r.text[:200]}")
@@ -72,15 +84,40 @@ def tg_request(method: str, **kwargs) -> dict | None:
 def send_telegram(message: str, chat_id: str = None) -> bool:
     """發送訊息"""
     cid = chat_id or TELEGRAM_CHAT_ID
+    if not cid:
+        log.warning("未設定 TELEGRAM_CHAT_ID，訊息僅列印")
+        return False
+        
+    # 如果訊息太長（Telegram 限制 4096 字），截斷它
+    if len(message) > 4000:
+        message = message[:4000] + "\n...(太長已截斷)"
+
     result = tg_request("sendMessage", data={
         "chat_id": cid,
         "text": message,
         "parse_mode": "HTML",
     })
     if result and result.get("ok"):
-        log.info("Telegram 通知發送成功")
         return True
     return False
+
+def report_error(context: str, err: Exception):
+    """將錯誤詳細資訊發送到 Telegram"""
+    tb = traceback.format_exc()
+    # 必須跳脫 HTML，否則 <module> 等字元會導致 Telegram API 報錯 (Bad Request: can't parse entities)
+    safe_err = html.escape(str(err))
+    safe_tb = html.escape(tb[-1000:])
+    
+    msg = (
+        f"❌ <b>系統發生錯誤</b>\n"
+        f"📍 位置: {context}\n"
+        f"⚠️ 類型: {type(err).__name__}\n"
+        f"📝 訊息: {safe_err}\n\n"
+        f"🔍 <b>堆疊追蹤:</b>\n"
+        f"<code>{safe_tb}</code>"
+    )
+    log.error(f"[{context}] 錯誤發送至 Telegram: {err}")
+    send_telegram(msg)
 
 # ============================================================
 # 狀態讀寫
@@ -166,6 +203,7 @@ def _fetch_cola_once() -> dict | None:
                 headless=True,
                 args=[
                     "--no-sandbox",
+                    "--disable-setuid-sandbox", # Docker 必備
                     "--disable-dev-shm-usage",
                     "--disable-blink-features=AutomationControlled",
                     "--disable-gpu",
@@ -205,8 +243,8 @@ def _fetch_cola_once() -> dict | None:
         log.warning("[\u53ef\u6a02] \u7121\u6cd5\u89e3\u6790\u53ef\u552e\u5e2d\u6b21")
         return None
 
-    except ImportError:
-        log.error("[\u53ef\u6a02] playwright \u672a\u5b89\u88dd")
+    except ImportError as e:
+        log.error(f"[\u53ef\u6a02] playwright 未安裝或匯入錯誤: {e}")
         return None
     except Exception as e:
         log.error(f"[\u53ef\u6a02] \u6293\u53d6\u932f\u8aa4: {e}")
@@ -395,6 +433,17 @@ def polling_loop():
                         text_out = build_status_text(current_state)
                     send_telegram(text_out, chat_id=chat_id)
 
+                elif lower in ("/logs", "看日誌", "日誌"):
+                    # 將日誌合併並透過 html.escape 處理，避免 < > 符號讓 Telegram API 報錯
+                    raw_text = "\n".join(log_buffer)
+                    clean_text = html.escape(raw_text)
+                    
+                    if len(clean_text) > 3500:
+                        clean_text = "..." + clean_text[-3500:] # 只取最後 3500 字
+                        
+                    header = "📜 <b>最近運行日誌</b>\n\n"
+                    send_telegram(header + f"<code>{clean_text}</code>", chat_id=chat_id)
+
                 elif lower in ("/help", "說明", "help"):
                     send_telegram(HELP_TEXT, chat_id=chat_id)
 
@@ -513,8 +562,8 @@ def monitor_loop():
             save_state(current_state)
 
         except Exception as e:
-            log.error(f"[監控] 主迴圈錯誤: {e}")
-            send_telegram(f"⚠️ <b>監控器發生錯誤</b>\n{e}")
+            report_error("監控主迴圈 (monitor_loop)", e)
+            time.sleep(60) # 發生錯誤先等一分鐘再重試，避免造成 Telegram 訊息轟炸
 
 # ============================================================
 # 程式進入點
