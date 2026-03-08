@@ -108,6 +108,24 @@ Container Manager → 容器 → travel_monitor → 重新啟動
 
 ---
 
+## 技術注意事項 (維護必看) 🛠️
+
+為了確保在 Synology NAS (Docker) 環境穩定運行，請注意以下幾點：
+
+1. **Docker 網路模式 (Network Mode)**:
+   - 必須在 `docker-compose.yml` 中設定 `network_mode: "host"`。
+   - 原因：Synology 預設的 Bridge 模式常導致 Telegram API 連線發生 30 秒超時。使用 Host 模式可繞過虛擬網路層，大幅提升效能。
+
+2. **Playwright 版本匹配**:
+   - `docker-compose.yml` 中的 Image 版本 (例如 `v1.58.0`) 必須與程式內的 Playwright 套件版本完全一致。
+   - 若未來更新 `pip install` 的版本，務必同步更新 Image 標籤，否則會報錯「找不到瀏覽器執行檔」。
+
+3. **Telegram 連線穩定性**:
+   - 已實施 `requests.Session()` 連線複用與自動 3 次重試機制。
+   - 若發生連線超時，程式會自動啟動「網路診斷」(DNS 與 Google 測試)，結果可透過 `/logs` 查閱。
+
+---
+
 ## 常見問題
 
 **Q：可樂旅遊查詢比較慢？**
