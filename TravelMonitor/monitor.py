@@ -126,7 +126,7 @@ def tg_request(method: str, **kwargs) -> dict | None:
             
     return None
 
-def send_telegram(message: str, chat_id: str = None) -> bool:
+def send_telegram(message: str, chat_id: str = None, **kwargs) -> bool:
     """發送訊息"""
     cid = chat_id or TELEGRAM_CHAT_ID
     if not cid:
@@ -141,10 +141,20 @@ def send_telegram(message: str, chat_id: str = None) -> bool:
         "chat_id": cid,
         "text": message,
         "parse_mode": "HTML",
+        **kwargs # 允許傳遞如 reply_markup 的參數
     })
     if result and result.get("ok"):
         return True
     return False
+
+# 定義主選單鍵盤 (Reply Keyboard)
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [{"text": "🔍 立即查詢"}, {"text": "📜 查看日誌"}]
+    ],
+    "resize_keyboard": True,
+    "one_time_keyboard": False
+}
 
 def report_error(context: str, err: Exception):
     """將錯誤詳細資訊發送到 Telegram"""
@@ -162,7 +172,7 @@ def report_error(context: str, err: Exception):
         f"<code>{safe_tb}</code>"
     )
     log.error(f"[{context}] 錯誤發送至 Telegram: {err}")
-    send_telegram(msg)
+    send_telegram(msg, reply_markup=json.dumps(MAIN_KEYBOARD)) # 報錯時也補回按鈕
 
 # ============================================================
 # 狀態讀寫
@@ -224,22 +234,22 @@ def fetch_lion() -> dict | None:
 # 可樂旅遊抓取（Playwright）+ 重試 3 次
 # ============================================================
 def fetch_cola(max_retries: int = 3) -> dict | None:
-    """\u62b9取可樂旅遊席次，失敗自動重試"""
+    """抓取可樂旅遊席次，失敗自動重試"""
     for attempt in range(1, max_retries + 1):
-        log.info(f"[\u53ef\u6a02] \u7b2c {attempt}/{max_retries} \u6b21\u6293\u53d6...")
+        log.info(f"[可樂] 第 {attempt}/{max_retries} 次抓取...")
         result = _fetch_cola_once()
         if result is not None:
             return result
         if attempt < max_retries:
-            wait = 15 * attempt   # \u6bcf\u6b21\u591a\u7b49\u4e00\u9ede：15s / 30s
-            log.info(f"[\u53ef\u6a02] \u6293\u53d6\u5931\u6557，{wait} \u79d2\u5f8c\u91cd\u8a66...")
+            wait = 15 * attempt   # 每次多等一點：15s / 30s
+            log.info(f"[可樂] 抓取失敗，{wait} 秒後重試...")
             time.sleep(wait)
-    log.error("[\u53ef\u6a02] \u6700\u7d42\u5931\u6557，\u653e\u68c4")
+    log.error("[可樂] 最終失敗，放棄")
     return None
 
 
 def _fetch_cola_once() -> dict | None:
-    """\u55ae\u6b21\u6293\u53d6，\u56de\u50b3 dict \u6216 None"""
+    """單次抓取，回傳 dict 或 None"""
     try:
         from playwright.sync_api import sync_playwright
 
@@ -275,9 +285,9 @@ def _fetch_cola_once() -> dict | None:
             body_text = page.inner_text("body")
             browser.close()
 
-        m_avail = re.search(r"\u53ef\u552e\s*\n?\s*(\d+)", body_text)
-        m_total = re.search(r"\u5718\u4f4d\s*\n?\s*(\d+)", body_text)
-        m_wait  = re.search(r"\u5019\u88dc\s*\n?\s*(\d+)", body_text)
+        m_avail = re.search(r"可售\s*\n?\s*(\d+)", body_text)
+        m_total = re.search(r"團位\s*\n?\s*(\d+)", body_text)
+        m_wait  = re.search(r"候補\s*\n?\s*(\d+)", body_text)
 
         if m_avail:
             return {
@@ -285,14 +295,14 @@ def _fetch_cola_once() -> dict | None:
                 "total":     int(m_total.group(1)) if m_total else None,
                 "waitlist":  int(m_wait.group(1))  if m_wait  else None,
             }
-        log.warning("[\u53ef\u6a02] \u7121\u6cd5\u89e3\u6790\u53ef\u552e\u5e2d\u6b21")
+        log.warning("[可樂] 無法解析可售席次")
         return None
 
     except ImportError as e:
-        log.error(f"[\u53ef\u6a02] playwright 未安裝或匯入錯誤: {e}")
+        log.error(f"[可樂] playwright 未安裝或匯入錯誤: {e}")
         return None
     except Exception as e:
-        log.error(f"[\u53ef\u6a02] \u6293\u53d6\u932f\u8aa4: {e}")
+        log.error(f"[可樂] 抓取錯誤: {e}")
         return None
 
 # ============================================================
@@ -466,7 +476,7 @@ def polling_loop():
 
                 # ── 指令判斷 ──────────────────────────
                 lower = text.lower()
-                if lower in ("/check", "查旅遊", "查詢"):
+                if lower in ("/check", "查旅遊", "查詢", "🔍 立即查詢"):
                     send_telegram("🔄 收到！馬上幫你查，稍等約 30 秒...", chat_id=chat_id)
                     # 在新執行緒執行查詢（避免阻塞 polling）
                     threading.Thread(
@@ -478,7 +488,7 @@ def polling_loop():
                         text_out = build_status_text(current_state)
                     send_telegram(text_out, chat_id=chat_id)
 
-                elif lower in ("/logs", "看日誌", "日誌"):
+                elif lower in ("/logs", "看日誌", "日誌", "📜 查看日誌"):
                     # 將日誌合併並透過 html.escape 處理，避免 < > 符號讓 Telegram API 報錯
                     raw_text = "\n".join(log_buffer)
                     clean_text = html.escape(raw_text)
@@ -634,10 +644,8 @@ def main():
         f"🦁 雄獅: {LION_TARGET_GROUP_ID}\n"
         f"🎡 可樂: {COLA_TOUR_CODE} ({COLA_TOUR_DATE})\n"
         f"⏰ 每天自動查詢時間：{times_str}\n\n"
-        f"📱 可直接輸入指令：\n"
-        f"<code>查旅遊</code> — 立刻查詢\n"
-        f"<code>狀態</code> — 目前席次\n"
-        f"/help — 完整說明"
+        f"📱 下方按鈕可直接操作查詢",
+        reply_markup=json.dumps(MAIN_KEYBOARD)
     )
 
     # 啟動 Telegram 指令監聽（背景執行緒）
