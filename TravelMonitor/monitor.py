@@ -70,6 +70,8 @@ current_state = {}                  # 最新席次快取
 # ============================================================
 # Telegram API
 # ============================================================
+tg_session = requests.Session() # 使用 Session 複用連線，提升穩定性
+
 def diagnose_network():
     """當 Telegram 連線失敗時，執行網路診斷"""
     log.info("--- 啟動網路診斷 ---")
@@ -106,7 +108,8 @@ def tg_request(method: str, **kwargs) -> dict | None:
     max_retries = 3
     for attempt in range(1, max_retries + 1):
         try:
-            r = requests.post(url, timeout=30, **kwargs)
+            # 增加超時至 45s，因為 Long Polling (getUpdates) 內部設定為 30s
+            r = tg_session.post(url, timeout=45, **kwargs)
             if r.status_code == 200:
                 return r.json()
             log.warning(f"Telegram API {method} 失敗 (嘗試 {attempt}): {r.status_code} {r.text[:200]}")
