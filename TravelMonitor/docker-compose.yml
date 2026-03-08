@@ -5,6 +5,7 @@ services:
     # 直接使用官方 Playwright image，不需要自己 Build
     image: mcr.microsoft.com/playwright/python:v1.58.0-noble
     container_name: travel_monitor
+    network_mode: "host"
     restart: unless-stopped
 
     # 啟動時安裝必要套件，加上 -u 確保日誌即時顯示

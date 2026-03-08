@@ -11,10 +11,11 @@ import time
 import threading
 import requests
 import logging
-from datetime import datetime
+from datetime import datetime  # 補回缺失的導入
 from pathlib import Path
 import traceback
 import html
+import socket  # 用於診斷 DNS
 
 # ============================================================
 # 從環境變數讀取設定
@@ -69,16 +70,57 @@ current_state = {}                  # 最新席次快取
 # ============================================================
 # Telegram API
 # ============================================================
-def tg_request(method: str, **kwargs) -> dict | None:
-    """呼叫 Telegram Bot API"""
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
+def diagnose_network():
+    """當 Telegram 連線失敗時，執行網路診斷"""
+    log.info("--- 啟動網路診斷 ---")
+    results = []
+    
+    # 1. 測試 DNS 解析
+    host = "api.telegram.org"
     try:
-        r = requests.post(url, timeout=30, **kwargs)
-        if r.status_code == 200:
-            return r.json()
-        log.warning(f"Telegram API {method} 失敗: {r.status_code} {r.text[:200]}")
+        start = time.time()
+        ip = socket.gethostbyname(host)
+        results.append(f"✅ DNS 解析成功: {host} -> {ip} ({time.time()-start:.2f}s)")
     except Exception as e:
-        log.error(f"Telegram 連線錯誤: {e}")
+        results.append(f"❌ DNS 解析失敗: {host}, 錯誤: {e}")
+
+    # 2. 測試外部網路 (Google)
+    try:
+        start = time.time()
+        r = requests.get("https://www.google.com", timeout=10)
+        results.append(f"✅ 外部網路測試 (Google): {r.status_code} ({time.time()-start:.2f}s)")
+    except Exception as e:
+        results.append(f"❌ 外部網路測試 (Google) 失敗: {e}")
+
+    for msg in results:
+        log.info(f"[診斷] {msg}")
+    log.info("--- 診斷結束 ---")
+
+def tg_request(method: str, **kwargs) -> dict | None:
+    """呼叫 Telegram Bot API (加入重試機制)"""
+    if not TELEGRAM_TOKEN:
+        log.warning("未設定 TELEGRAM_TOKEN，略過 API 呼叫")
+        return None
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
+    
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = requests.post(url, timeout=30, **kwargs)
+            if r.status_code == 200:
+                return r.json()
+            log.warning(f"Telegram API {method} 失敗 (嘗試 {attempt}): {r.status_code} {r.text[:200]}")
+        except requests.exceptions.Timeout:
+            log.error(f"Telegram 連線超時 (嘗試 {attempt}/{max_retries})")
+            if attempt == max_retries:
+                log.error("已達最大重試次數，啟動診斷...")
+                diagnose_network()
+            else:
+                time.sleep(2) # 等待兩秒後重試
+        except Exception as e:
+            log.error(f"Telegram 連線錯誤 (嘗試 {attempt}): {e}")
+            if attempt < max_retries: time.sleep(2)
+            
     return None
 
 def send_telegram(message: str, chat_id: str = None) -> bool:
