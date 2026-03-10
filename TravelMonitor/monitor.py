@@ -22,8 +22,12 @@ import socket  # 用於診斷 DNS
 # ============================================================
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-# 每天固定在這幾個時間點執行（24 小時制）
+# 每天排程報告時間（24 小時制）：這兩個時間點會發完整旅遊報告
 SCHEDULE_HOURS = [10, 17]   # 早上 10:00 / 下午 17:00
+
+# 每小時巡邏的時間範圍（09:00 ~ 21:00，超出範圍不巡邏）
+MONITOR_START_HOUR = 9    # 開始時間（含）
+MONITOR_END_HOUR   = 21   # 結束時間（含最後一次）
 
 # ── 雄獅旅遊 ──
 LION_NORM_GROUP_ID   = os.environ.get("LION_NORM_GROUP_ID",   "5c25c87a-b6d7-4ecc-88b6-07a379bfcf6e")
@@ -573,7 +577,7 @@ def _manual_check(chat_id: str):
 # 定時監控主迴圈（每天指定時間點執行）
 # ============================================================
 def next_trigger_time() -> datetime:
-    """計算下一個觸發時間點（10:00 或 17:00）"""
+    """計算下一個觸發時間點（10:00 或 17:00），供定期報告顯示用"""
     from datetime import timedelta
     now = datetime.now()
     today = now.date()
@@ -593,24 +597,64 @@ def next_trigger_time() -> datetime:
         return datetime(tomorrow.year, tomorrow.month, tomorrow.day, h, 0, 0)
 
 
+def next_hourly_time() -> datetime:
+    """
+    計算下一個「整點」巡邏時間：
+    - 每小時整點（xx:00）
+    - 只在 MONITOR_START_HOUR ~ MONITOR_END_HOUR 之間執行
+    - 超出範圍時，等到隔天 MONITOR_START_HOUR
+    """
+    from datetime import timedelta
+    now = datetime.now()
+    # 下一個整點 = 當前小時 +1，分秒清零
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+    # 在巡邏範圍內直接返回
+    if MONITOR_START_HOUR <= next_hour.hour <= MONITOR_END_HOUR:
+        return next_hour
+
+    # 超出範圍（例如已過 21:00），等到明天 MONITOR_START_HOUR
+    if next_hour.hour > MONITOR_END_HOUR:
+        tomorrow = (now + timedelta(days=1)).date()
+        return datetime(tomorrow.year, tomorrow.month, tomorrow.day,
+                        MONITOR_START_HOUR, 0, 0)
+
+    # 早於 MONITOR_START_HOUR（例如凌晨），等到今天 MONITOR_START_HOUR
+    return now.replace(hour=MONITOR_START_HOUR, minute=0, second=0, microsecond=0)
+
+
 def monitor_loop():
-    """在每天 10:00 / 17:00 自動查詢"""
+    """
+    主監控迴圈：
+    - 每小時整點巡邏（09:00 ~ 21:00）
+    - 若為排程時間（10:00 / 17:00）：發送完整報告
+    - 其餘時間：靜默查詢，只有席次變動才發通知
+    """
     global current_state
 
     while True:
-        # 計算下次執行時間
-        nxt = next_trigger_time()
+        # 計算下一個整點巡邏時間
+        nxt = next_hourly_time()
         wait_sec = (nxt - datetime.now()).total_seconds()
-        log.info(f"[監控] 下次查詢時間：{nxt.strftime('%m/%d %H:%M')}（{wait_sec/3600:.1f} 小時後）")
+        log.info(
+            f"[監控] 下次巡邏：{nxt.strftime('%m/%d %H:%M')}"
+            f"（{wait_sec/3600:.1f} 小時後）"
+        )
 
-        # 休眠到指定時間
+        # 休眠到整點
         time.sleep(max(0, wait_sec))
+
+        # 判斷是否為定期報告時間
+        is_schedule_hour = datetime.now().hour in SCHEDULE_HOURS
+        mode_label = "定期報告" if is_schedule_hour else "靜默巡邏"
+        log.info(f"[監控] 執行 {mode_label}（{datetime.now().strftime('%H:%M')}）")
 
         try:
             with state_lock:
                 state_copy = dict(current_state)
 
-            result = do_check(state_copy, silent=False)
+            # silent=True 表示靜默模式（無變動不發訊息），排程時間發完整報告
+            result = do_check(state_copy, silent=not is_schedule_hour)
 
             with state_lock:
                 current_state.update(result)
@@ -618,7 +662,7 @@ def monitor_loop():
 
         except Exception as e:
             report_error("監控主迴圈 (monitor_loop)", e)
-            time.sleep(60) # 發生錯誤先等一分鐘再重試，避免造成 Telegram 訊息轟炸
+            time.sleep(60)  # 發生錯誤先等一分鐘再重試，避免造成 Telegram 訊息轟炸
 
 # ============================================================
 # 程式進入點
