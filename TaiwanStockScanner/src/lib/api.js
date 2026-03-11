@@ -1,42 +1,205 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-/**
- * 獲取所有上市股票清單
- */
-export async function fetchStockList() {
+async function fetchTseList() {
   try {
-    // 使用 Vite Proxy 避免 CORS 問題
     const response = await fetch('/api/twse/v1/exchangeReport/STOCK_DAY_ALL');
-    
     if (!response.ok) throw new Error('Network response was not ok');
-    
     const data = await response.json();
-    return data;
+    return data.map(item => ({ ...item, Market: 'TSE' }));
   } catch (error) {
-    console.error('Error fetching stock list:', error);
-    // 降級方案：如果 API 失敗，回傳一組模擬數據供測試 UI
-    return [
-      { Code: '2330', Name: '台積電', ClosingPrice: '900', Change: '+10' },
-      { Code: '2317', Name: '鴻海', ClosingPrice: '180', Change: '-2' },
-      { Code: '2454', Name: '聯發科', ClosingPrice: '1200', Change: '+5' },
-      { Code: '0050', Name: '元大台灣50', ClosingPrice: '160', Change: '0' },
-      { Code: '2881', Name: '富邦金', ClosingPrice: '75', Change: '+1' },
-      { Code: '2603', Name: '長榮', ClosingPrice: '170', Change: '-3' }
-    ];
+    console.error('Error fetching twse list:', error);
+    return [];
   }
 }
 
-/**
- * 獲取特定股票的歷史數據 (本月)
- * @param {string} symbol - 股票代碼 (e.g., 2330)
- */
+async function fetchTpexList() {
+  try {
+    const response = await fetch('/api/tpex/v1/tpex_mainboard_quotes');
+    if (!response.ok) throw new Error('Network response was not ok');
+    const data = await response.json();
+    return data.map(item => ({
+      Code: item.SecuritiesCompanyCode,
+      Name: item.CompanyName,
+      ClosingPrice: item.Close,
+      Change: item.Change,
+      Market: 'OTC'
+    }));
+  } catch (error) {
+    console.error('Error fetching tpex list:', error);
+    return [];
+  }
+}
+
+const toYahooSymbol = (stock) => {
+  const code = String(stock.Code || '').trim();
+  if (!code) return null;
+  const market = stock.Market;
+  if (market === 'OTC') return `${code}.TWO`;
+  return `${code}.TW`;
+};
+
+function computeRsi(closes, period=6) {
+  if (closes.length <= period) return 50;
+  let gains = 0, losses = 0;
+  for(let i=1; i<=period; i++) {
+    const diff = closes[i] - closes[i-1];
+    if(diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for(let i=period+1; i<closes.length; i++) {
+    const diff = closes[i] - closes[i-1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - (100 / (1 + avgGain / avgLoss));
+}
+
+function computeKDJ(closes, highs, lows, period=9) {
+  if (closes.length < period) return { k: 50, d: 50, j: 50 };
+  let k = 50, d = 50;
+  for (let i = 0; i < closes.length; i++) {
+    let maxHigh = -Infinity;
+    let minLow = Infinity;
+    for (let j = Math.max(0, i - period + 1); j <= i; j++) {
+      if (highs[j] > maxHigh) maxHigh = highs[j];
+      if (lows[j] < minLow) minLow = lows[j];
+    }
+    const currentClose = closes[i];
+    let rsv;
+    if (maxHigh === minLow) rsv = 50;
+    else rsv = ((currentClose - minLow) / (maxHigh - minLow)) * 100;
+    k = k * (2/3) + rsv * (1/3);
+    d = d * (2/3) + k * (1/3);
+  }
+  const j = 3 * k - 2 * d;
+  return { k, d, j };
+}
+
+async function fetchYahooQuotes(symbols) {
+  if (!symbols.length) return new Map();
+  const result = new Map();
+  const queue = [...symbols];
+  const concurrency = 5;
+
+  const worker = async () => {
+    while (queue.length > 0) {
+      const symbol = queue.shift();
+      if (!symbol) continue;
+
+      const url = `/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?range=100d&interval=1d`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const data = await response.json();
+        const chartData = data?.chart?.result?.[0];
+        if (!chartData) continue;
+
+        const meta = chartData.meta;
+        const quote = chartData.indicators?.quote?.[0];
+        if (!quote || !quote.close || quote.close.length < 2) continue;
+
+        const timestamp = chartData.timestamp || [];
+        
+        // Fill missing values with previous days
+        const rawCloses = quote.close;
+        const rawHighs = quote.high;
+        const rawLows = quote.low;
+
+        const closes = rawCloses.map((c, i) => c !== null ? c : (i > 0 ? rawCloses[i-1] : meta.chartPreviousClose || 0));
+        const highs = rawHighs.map((h, i) => h !== null ? h : (i > 0 ? rawHighs[i-1] : meta.chartPreviousClose || 0));
+        const lows = rawLows.map((l, i) => l !== null ? l : (i > 0 ? rawLows[i-1] : meta.chartPreviousClose || 0));
+
+        // Use live meta data to update the most recent bar
+        if (meta.regularMarketPrice) {
+          closes[closes.length - 1] = meta.regularMarketPrice;
+        }
+        if (meta.regularMarketDayHigh) {
+          highs[highs.length - 1] = Math.max(highs[highs.length - 1], meta.regularMarketDayHigh);
+        }
+        if (meta.regularMarketDayLow) {
+          lows[lows.length - 1] = Math.min(lows[lows.length - 1], meta.regularMarketDayLow);
+        }
+
+        const currentPrice = meta.regularMarketPrice || closes[closes.length - 1];
+        // For Daily Change: Today (closes.last) vs Yesterday (closes.last-2)
+        // Note: closes.last is today because of interval=1d
+        const previousClose = closes[closes.length - 2];
+        const change = currentPrice - previousClose;
+        const changePercent = (change / previousClose) * 100;
+
+        let lastTime = null;
+        if (timestamp.length > 0) {
+          lastTime = timestamp[timestamp.length - 1];
+        }
+
+        const validClosesForRsi = closes.filter(c => c > 0);
+        const rsi = computeRsi(validClosesForRsi, 6);
+        const { k, d, j } = computeKDJ(closes, highs, lows, 9);
+
+        result.set(symbol, {
+          regularMarketPrice: currentPrice,
+          regularMarketChange: change,
+          regularMarketChangePercent: changePercent,
+          regularMarketTime: lastTime,
+          rsi: rsi,
+          k: k,
+          d: d,
+          j: j
+        });
+      } catch (err) {
+        console.error(`Error fetching yahoo quote for ${symbol}:`, err);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }).map(() => worker()));
+  return result;
+}
+
+export async function fetchStockList(options = { includeTse: true, includeOtc: true }) {
+  const { includeTse, includeOtc } = options;
+  const results = [];
+
+  if (includeTse) {
+    const tse = await fetchTseList();
+    results.push(...tse);
+  }
+
+  if (includeOtc) {
+    const otc = await fetchTpexList();
+    results.push(...otc);
+  }
+
+  const map = new Map();
+  results.forEach(item => {
+    if (item?.Code) {
+      map.set(item.Code, item);
+    }
+  });
+
+  if (map.size === 0) {
+    return [
+      { Code: '2330', Name: 'TSMC', ClosingPrice: '900', Change: '+10' },
+      { Code: '2317', Name: 'Hon Hai', ClosingPrice: '180', Change: '-2' },
+      { Code: '2454', Name: 'MediaTek', ClosingPrice: '1200', Change: '+5' },
+      { Code: '0050', Name: 'ETF 50', ClosingPrice: '160', Change: '0' },
+      { Code: '2881', Name: 'Fubon', ClosingPrice: '75', Change: '+1' },
+      { Code: '2603', Name: 'Evergreen', ClosingPrice: '170', Change: '-3' }
+    ];
+  }
+
+  return Array.from(map.values());
+}
+
 export async function fetchStockHistory(symbol) {
   try {
     const response = await fetch(`https://openapi.twse.com.tw/v1/stock/STOCK_DAY_ALL`);
     const data = await response.json();
-    // 這裡的公開 API 其實是回傳所有股票今日數據
-    // 如果要真正的歷史數據進行 KDJ 計算，通常需要取得過去 30 天的資料
-    // 對於 MVP，我們先假設使用者要篩選的是基於「近期趨勢」
     return data.find(s => s.Code === symbol);
   } catch (error) {
     console.error(`Error fetching history for ${symbol}:`, error);
@@ -44,11 +207,7 @@ export async function fetchStockHistory(symbol) {
   }
 }
 
-/**
- * 自定義 Hook 用於掃描符合指標的股票
- */
 export function useScanner() {
-  const [stocks, setStocks] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -58,42 +217,59 @@ export function useScanner() {
     setScanning(true);
     setProgress(0);
     setError(null);
-    
-    // 1. 獲取初始清單
-    const list = await fetchStockList();
+
+    const list = await fetchStockList({ includeTse: true, includeOtc: true });
     if (!list || list.length === 0) {
-      setError('無法獲取股票資料，請檢查網路連線或稍後再試。');
+      setError('No stocks returned. Please check API availability or try again later.');
       setScanning(false);
       return;
     }
 
-    setStocks(list);
+    const codeQuery = String(criteria.codeQuery || '').trim();
+    const filteredList = codeQuery
+      ? list.filter(item => String(item.Code || '').includes(codeQuery))
+      : list;
+
+    const subsetLimit = codeQuery ? filteredList.length : Math.min(filteredList.length, 600);
+    const subsetList = filteredList.slice(0, subsetLimit);
+    
+    const symbols = subsetList.map((stock) => toYahooSymbol(stock)).filter(Boolean);
+    setProgress(10);
+    
+    const yahooMap = await fetchYahooQuotes(symbols);
+    setProgress(60);
+
     const matched = [];
-    const total = Math.min(list.length, 500); // 批次處理，上限 500 檔避免效能問題
-
-    // 2. 篩選過程
-    for (let i = 0; i < total; i++) {
-      const stock = list[i];
+    for (let i = 0; i < subsetList.length; i++) {
+      const stock = subsetList[i];
+      const symbol = toYahooSymbol(stock);
+      const quote = symbol ? yahooMap.get(symbol) : null;
       
-      // 這裡暫時仍使用模擬數據，確保 UI 邏輯正常
-      const dummyRsi = Math.random() * 100;
-      const dummyK = Math.random() * 100;
-      const dummyD = Math.random() * 100;
-      const dummyJ = Math.random() * 100;
+      const rsiValue = quote && quote.rsi ? quote.rsi : 50;
+      const jValue = quote && quote.j ? quote.j : 50;
 
-      if (dummyRsi <= criteria.rsiMax && dummyJ <= criteria.jMax) {
-        matched.push({
-          ...stock,
-          rsi: dummyRsi.toFixed(2),
-          k: dummyK.toFixed(2),
-          d: dummyD.toFixed(2),
-          j: dummyJ.toFixed(2)
-        });
+      const formatNum = (v) => typeof v === 'number' ? Number(v.toFixed(2)) : v;
+
+      const enriched = {
+        ...stock,
+        rsi: (quote && typeof quote.rsi === 'number') ? quote.rsi.toFixed(2) : '--',
+        k: (quote && typeof quote.k === 'number') ? quote.k.toFixed(2) : '--',
+        d: (quote && typeof quote.d === 'number') ? quote.d.toFixed(2) : '--',
+        j: (quote && typeof quote.j === 'number') ? quote.j.toFixed(2) : '--',
+        ClosingPrice: formatNum(quote?.regularMarketPrice) ?? stock.ClosingPrice,
+        Change: formatNum(quote?.regularMarketChange) ?? stock.Change,
+        ChangePercent: formatNum(quote?.regularMarketChangePercent) ?? stock.ChangePercent,
+        QuoteTime: quote?.regularMarketTime ?? null
+      };
+
+      if (codeQuery) {
+        matched.push(enriched);
+      } else if (rsiValue <= criteria.rsiMax && jValue <= criteria.jMax) {
+        matched.push(enriched);
       }
       
       if (i % 20 === 0) {
-        setProgress(Math.round((i / total) * 100));
-        // 使用非同步釋放主線程，避免 UI 凍結
+        setProgress(60 + Math.round((i / subsetList.length) * 40));
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
