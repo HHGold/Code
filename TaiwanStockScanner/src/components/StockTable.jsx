@@ -56,6 +56,34 @@ const buildSeries = (base, delta, seed, points = 24) => {
 };
 
 const StockTable = ({ results, scanning, error }) => {
+  const [sortConfig, setSortConfig] = React.useState({ key: null, direction: 'asc' });
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      key = null; // Reset to default
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedResults = React.useMemo(() => {
+    if (!sortConfig.key) return results;
+    return [...results].sort((a, b) => {
+      const aVal = toNumber(a[sortConfig.key]);
+      const bVal = toNumber(b[sortConfig.key]);
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [results, sortConfig]);
+
+  const SortIcon = ({ column }) => {
+    if (sortConfig.key !== column) return <MoreHorizontal size={12} className="opacity-20 ml-1 inline" />;
+    return sortConfig.direction === 'asc' ? <TrendingUp size={12} className="ml-1 inline text-[var(--primary)]" /> : <TrendingDown size={12} className="ml-1 inline text-[var(--primary)]" />;
+  };
+
   return (
      <div className="glass-panel overflow-hidden flex flex-col relative h-full min-h-0">
         <div className="p-5 border-b border-[var(--border-light)] flex items-center justify-between flex-wrap gap-4">
@@ -87,34 +115,70 @@ const StockTable = ({ results, scanning, error }) => {
           <table>
             <thead>
               <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th className="text-right">Price</th>
-                <th className="text-right">Change</th>
-                <th className="text-center hidden md:table-cell">Volatility</th>
-                <th className="text-center">RSI</th>
-                <th className="text-center">J Value</th>
-                <th className="text-center">Rating</th>
+                <th>股票代號</th>
+                <th>名稱</th>
+                <th className="text-right">價格</th>
+                <th className="text-right">漲跌</th>
+                <th className="text-center hidden md:table-cell">走勢圖</th>
+                <th 
+                  className="text-center cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSort('rsi')}
+                >
+                  <div className="flex items-center justify-center">RSI <SortIcon column="rsi" /></div>
+                </th>
+                <th 
+                  className="text-center cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSort('j')}
+                >
+                  <div className="flex items-center justify-center">J值 <SortIcon column="j" /></div>
+                </th>
+                <th className="text-center">趨勢</th>
               </tr>
             </thead>
             <tbody>
               <AnimatePresence>
-                {results.length === 0 && !scanning && !error && (
+                {sortedResults.length === 0 && !scanning && !error && (
                   <tr>
                     <td colSpan="8" className="text-center py-20 text-[var(--text-muted)] border-none">
                        <div className="flex flex-col items-center gap-3">
                          <Search size={32} className="opacity-20" />
-                         <p>No results yet. Adjust filters and scan.</p>
+                         <p>尚無搜尋結果。請調整篩選條件並開始掃描。</p>
                        </div>
                     </td>
                   </tr>
                 )}
                 
-                {results.map((stock, i) => {
+                {sortedResults.map((stock, i) => {
                   const changeVal = toNumber(stock.Change);
                   const isUp = changeVal >= 0;
                   const base = toNumber(stock.ClosingPrice);
                   const series = buildSeries(base, changeVal, seedFromCode(stock.Code));
+                  
+                  // Trend Logic
+                  const k = toNumber(stock.k);
+                  const d = toNumber(stock.d);
+                  const jVal = toNumber(stock.j);
+                  const pk = toNumber(stock.prevK);
+                  const pd = toNumber(stock.prevD);
+                  const pj = toNumber(stock.prevJ);
+
+                  const getTrend = () => {
+                    // Golden Cross: K crosses D upward
+                    const isGoldenCross = pk <= pd && k > d;
+                    // Death Cross: K crosses D downward
+                    const isDeathCross = pk >= pd && k < d;
+
+                    if (isGoldenCross && (jVal < 10 || pj < 0)) {
+                      return <span className="badge uptrend px-2 py-1">超賣 (買)</span>;
+                    }
+                    if (isDeathCross && (jVal > 90 || pj > 100)) {
+                      return <span className="badge downtrend px-2 py-1">超買 (賣)</span>;
+                    }
+                    
+                    if (k > d) return <span className="badge opacity-50 px-2 py-1">偏多</span>;
+                    if (k < d) return <span className="badge opacity-50 px-2 py-1">偏空</span>;
+                    return <span className="badge neutral px-2 py-1">盤整</span>;
+                  };
                   
                   return (
                     <Motion.tr 
@@ -129,7 +193,7 @@ const StockTable = ({ results, scanning, error }) => {
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-transparent border border-white/5 flex items-center justify-center text-xs font-bold shadow-inner">
                             {stock.Name.charAt(0)}
                           </div>
-                          <span className="mono font-semibold text-white tracking-wider">{stock.Code}</span>
+                          <span className="mono font-bold text-white text-base tracking-wider">{stock.Code}</span>
                         </div>
                       </td>
                       <td>
@@ -137,7 +201,7 @@ const StockTable = ({ results, scanning, error }) => {
                           href={`https://tw.stock.yahoo.com/quote/${stock.Code}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[var(--text-muted)] font-medium hover:text-white transition-colors"
+                          className="text-[var(--text-muted)] font-bold text-base hover:text-white transition-colors"
                         >
                           {stock.Name}
                         </a>
@@ -168,13 +232,7 @@ const StockTable = ({ results, scanning, error }) => {
                         {stock.j}
                       </td>
                       <td className="text-center">
-                        {parseFloat(stock.rsi) < 30 ? (
-                          <span className="badge uptrend">Uptrend</span>
-                        ) : parseFloat(stock.rsi) > 70 ? (
-                          <span className="badge downtrend">Downtrend</span>
-                        ) : (
-                          <span className="badge neutral">Medium</span>
-                        )}
+                        {getTrend()}
                       </td>
                     </Motion.tr>
                   );

@@ -1,16 +1,56 @@
-# React + Vite
+# Taiwan Stock Scanner | 台灣股票掃描器
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+這是一個基於 React 開發的現代化台灣股票掃描工具，採用專業的深色模式與玻璃擬態 (Glassmorphism) 介面設計。本工具專為技術分析投資者打造，提供精確的指標計算與即時的市場數據追蹤。
 
-Currently, two official plugins are available:
+## 🌟 核心功能
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **精確指標計算**：
+  - **KDJ (9, 3, 3)**：採用業界標準算法，參考過去 9 日最高價與最低價計算 RSV，數值與主流手機看盤 APP 完全對齊。
+  - **RSI (6)**：精確計算 6 日相對強弱指標。
+- **即時數據整合**：
+  - 串接 Yahoo Finance API 獲取盤中即時價格與漲跌數據。
+  - 整合台灣證交所 (TWSE) 與櫃買中心 (TPEX) 官方股票清單。
+- **智能趨勢判定**：
+  - **超賣 (買)**：偵測 J 值低檔且 K 線向上穿過 D 線的「黃金交叉」。
+  - **超買 (賣)**：偵測 J 值高檔且 K 線向下穿過 D 線的「死亡交叉」。
+- **優質使用者體驗**：
+  - **動態排序**：點擊 RSI 或 J 值欄位標題即可快速排序，輕鬆找出極端數值股。
+  - **快速搜尋**：支援股票代碼模糊搜尋，並整合 Enter 鍵快速觸發掃描。
+  - **專業介面**：動態走勢圖 (Sparklines) 與全響應式深色質感設計。
 
-## React Compiler
+## 🚀 技術堆疊
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **前端框架**：React 18
+- **構建工具**：Vite
+- **動畫效果**：Framer Motion
+- **圖示庫**：Lucide React
+- **數據源**：Yahoo Finance API, TWSE OpenAPI
 
-## Expanding the ESLint configuration
+## 🛠️ 開發與部署
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 安裝依賴
+```bash
+npm install
+```
+
+### 啟動開發伺服器
+```bash
+npm run dev
+```
+
+### 構建生產版本
+```bash
+npm run build
+```
+
+## 📊 指標說明
+
+| 指標 | 說明 |
+| :--- | :--- |
+| **價格 (Price)** | 顯示今日最新成交價，自動格式化至小數點後兩位。 |
+| **漲跌 (Change)** | 顯示今日漲跌金額，與官方昨收對齊。 |
+| **J 值** | 判斷股價強弱的重要領先指標，數值 < 10 進入低檔區，> 90 進入高檔區。 |
+| **趨勢** | 結合 KDJ 交叉訊號與數值區間，自動標記買賣參考點。 |
+
+---
+*本工具僅供技術分析參考，投資有風險，入市需謹慎。*

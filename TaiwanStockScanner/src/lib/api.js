@@ -60,8 +60,13 @@ function computeRsi(closes, period=6) {
 }
 
 function computeKDJ(closes, highs, lows, period=9) {
-  if (closes.length < period) return { k: 50, d: 50, j: 50 };
+  if (closes.length < period) return { 
+    current: { k: 50, d: 50, j: 50 }, 
+    prev: { k: 50, d: 50, j: 50 } 
+  };
   let k = 50, d = 50;
+  let prevK = 50, prevD = 50, prevJ = 50;
+  
   for (let i = 0; i < closes.length; i++) {
     let maxHigh = -Infinity;
     let minLow = Infinity;
@@ -73,11 +78,21 @@ function computeKDJ(closes, highs, lows, period=9) {
     let rsv;
     if (maxHigh === minLow) rsv = 50;
     else rsv = ((currentClose - minLow) / (maxHigh - minLow)) * 100;
+    
+    if (i === closes.length - 2) {
+      prevK = k;
+      prevD = d;
+      prevJ = 3 * k - 2 * d;
+    }
+    
     k = k * (2/3) + rsv * (1/3);
     d = d * (2/3) + k * (1/3);
   }
   const j = 3 * k - 2 * d;
-  return { k, d, j };
+  return { 
+    current: { k, d, j }, 
+    prev: { k: prevK, d: prevD, j: prevJ } 
+  };
 }
 
 async function fetchYahooQuotes(symbols) {
@@ -104,8 +119,6 @@ async function fetchYahooQuotes(symbols) {
         if (!quote || !quote.close || quote.close.length < 2) continue;
 
         const timestamp = chartData.timestamp || [];
-        
-        // Fill missing values with previous days
         const rawCloses = quote.close;
         const rawHighs = quote.high;
         const rawLows = quote.low;
@@ -114,32 +127,21 @@ async function fetchYahooQuotes(symbols) {
         const highs = rawHighs.map((h, i) => h !== null ? h : (i > 0 ? rawHighs[i-1] : meta.chartPreviousClose || 0));
         const lows = rawLows.map((l, i) => l !== null ? l : (i > 0 ? rawLows[i-1] : meta.chartPreviousClose || 0));
 
-        // Use live meta data to update the most recent bar
-        if (meta.regularMarketPrice) {
-          closes[closes.length - 1] = meta.regularMarketPrice;
-        }
-        if (meta.regularMarketDayHigh) {
-          highs[highs.length - 1] = Math.max(highs[highs.length - 1], meta.regularMarketDayHigh);
-        }
-        if (meta.regularMarketDayLow) {
-          lows[lows.length - 1] = Math.min(lows[lows.length - 1], meta.regularMarketDayLow);
-        }
+        if (meta.regularMarketPrice) closes[closes.length - 1] = meta.regularMarketPrice;
+        if (meta.regularMarketDayHigh) highs[highs.length - 1] = Math.max(highs[highs.length - 1], meta.regularMarketDayHigh);
+        if (meta.regularMarketDayLow) lows[lows.length - 1] = Math.min(lows[lows.length - 1], meta.regularMarketDayLow);
 
         const currentPrice = meta.regularMarketPrice || closes[closes.length - 1];
-        // For Daily Change: Today (closes.last) vs Yesterday (closes.last-2)
-        // Note: closes.last is today because of interval=1d
         const previousClose = closes[closes.length - 2];
         const change = currentPrice - previousClose;
         const changePercent = (change / previousClose) * 100;
 
         let lastTime = null;
-        if (timestamp.length > 0) {
-          lastTime = timestamp[timestamp.length - 1];
-        }
+        if (timestamp.length > 0) lastTime = timestamp[timestamp.length - 1];
 
         const validClosesForRsi = closes.filter(c => c > 0);
         const rsi = computeRsi(validClosesForRsi, 6);
-        const { k, d, j } = computeKDJ(closes, highs, lows, 9);
+        const kdj = computeKDJ(closes, highs, lows, 9);
 
         result.set(symbol, {
           regularMarketPrice: currentPrice,
@@ -147,9 +149,12 @@ async function fetchYahooQuotes(symbols) {
           regularMarketChangePercent: changePercent,
           regularMarketTime: lastTime,
           rsi: rsi,
-          k: k,
-          d: d,
-          j: j
+          k: kdj.current.k,
+          d: kdj.current.d,
+          j: kdj.current.j,
+          prevK: kdj.prev.k,
+          prevD: kdj.prev.d,
+          prevJ: kdj.prev.j
         });
       } catch (err) {
         console.error(`Error fetching yahoo quote for ${symbol}:`, err);
@@ -256,6 +261,9 @@ export function useScanner() {
         k: (quote && typeof quote.k === 'number') ? quote.k.toFixed(2) : '--',
         d: (quote && typeof quote.d === 'number') ? quote.d.toFixed(2) : '--',
         j: (quote && typeof quote.j === 'number') ? quote.j.toFixed(2) : '--',
+        prevK: quote?.prevK,
+        prevD: quote?.prevD,
+        prevJ: quote?.prevJ,
         ClosingPrice: formatNum(quote?.regularMarketPrice) ?? stock.ClosingPrice,
         Change: formatNum(quote?.regularMarketChange) ?? stock.Change,
         ChangePercent: formatNum(quote?.regularMarketChangePercent) ?? stock.ChangePercent,
