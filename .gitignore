@@ -24,5 +24,6 @@ _page_text.txt
 _demo*.py
 _demo*.txt
 node_modules/
+out/
 .vscode/
 .DS_Store
