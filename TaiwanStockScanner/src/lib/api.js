@@ -38,7 +38,7 @@ const toYahooSymbol = (stock) => {
   return `${code}.TW`;
 };
 
-function computeRsi(closes, period=6) {
+export function computeRsi(closes, period=6) {
   if (closes.length <= period) return 50;
   let gains = 0, losses = 0;
   for(let i=1; i<=period; i++) {
@@ -59,7 +59,7 @@ function computeRsi(closes, period=6) {
   return 100 - (100 / (1 + avgGain / avgLoss));
 }
 
-function computeKDJ(closes, highs, lows, period=9) {
+export function computeKDJ(closes, highs, lows, period=9) {
   if (closes.length < period) return { 
     current: { k: 50, d: 50, j: 50 }, 
     prev: { k: 50, d: 50, j: 50 } 
