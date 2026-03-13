@@ -28,7 +28,7 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        webviewView.webview.onDidReceiveMessage(data => {
+        webviewView.webview.onDidReceiveMessage((data: any) => {
             switch (data.type) {
                 case 'backup':
                     {
@@ -39,7 +39,7 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
                 case 'restore':
                     {
                         const networkPath = vscode.workspace.getConfiguration('antigravityBackup').get('networkPath') as string;
-                        vscode.window.showWarningMessage('Warning: Please CLOSE the Antigravity app before restoring! Restore will overwrite your current local data. Are you sure?', 'Yes', 'No').then(selection => {
+                        vscode.window.showWarningMessage('Warning: Please CLOSE the Antigravity app before restoring! Restore will overwrite your current local data. Are you sure?', 'Yes', 'No').then((selection: string | undefined) => {
                             if (selection === 'Yes') {
                                 runRestore(networkPath, webviewView.webview);
                             } else {
@@ -64,8 +64,18 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private _escapeHtml(unsafe: string) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     private _getHtmlForWebview(webview: vscode.Webview) {
         const networkPath = vscode.workspace.getConfiguration('antigravityBackup').get('networkPath') as string;
+        const escapedPath = this._escapeHtml(networkPath);
 
         return `<!DOCTYPE html>
             <html lang="en">
@@ -126,7 +136,7 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
             <body>
                 <div class="info-box">
                     <div class="title">Network Backup Path:</div>
-                    <div id="network-path-display">${networkPath}</div>
+                    <div id="network-path-display">${escapedPath}</div>
                     <div style="font-size: 12px; margin-top: 5px; color: var(--vscode-descriptionForeground)">
                        (Can be changed in VS Code Settings: antigravityBackup.networkPath)
                     </div>
