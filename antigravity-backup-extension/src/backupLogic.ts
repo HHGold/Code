@@ -32,7 +32,6 @@ function getLocalGeminiRoot(): string {
     return path.join(os.homedir(), '.gemini');
 }
 
-<<<<<<< HEAD
 function getAppDataPath(): string {
     return path.join(process.env.APPDATA || '', 'Antigravity', 'User', 'globalStorage');
 }
@@ -41,23 +40,6 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
     return new Promise((resolve) => {
         if (!fs.existsSync(dest)) {
             fs.mkdirSync(dest, { recursive: true });
-=======
-/**
- * 執行 robocopy 命令進行增量備份或還原
- * @param source 來源路徑
- * @param dest 目標路徑
- * @param webview 用於回傳狀態的 Webview
- */
-async function runRobocopy(source: string, dest: string, webview: vscode.Webview): Promise<boolean> {
-    return new Promise(async (resolve) => {
-        try {
-            if (!fs.existsSync(dest)) {
-                await fs.promises.mkdir(dest, { recursive: true });
-            }
-        } catch (err: any) {
-            webview.postMessage({ type: 'status', message: '✗ Error creating directory: ' + err.message });
-            return resolve(false);
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
         }
 
         // 優化參數：
@@ -72,15 +54,9 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
 
         const child = spawn('robocopy', args);
 
-<<<<<<< HEAD
         child.on('close', (code) => {
             // Robocopy code < 8 代表成功 (0-7 都是正常的複製成功狀態)
             if (code !== null && code <= 7) {
-=======
-        child.on('close', (code: number | null) => {
-            if (code !== null && code < 8) {
-                webview.postMessage({ type: 'status', message: '✓ ' + path.basename(source) + ' completed.' });
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
                 resolve(true);
             } else {
                 webview.postMessage({ type: 'status', message: `! Check: ${specificFile || path.basename(source)} partial or skipped (Code ${code})` });
@@ -88,7 +64,7 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
             }
         });
 
-        child.on('error', (err: Error) => {
+        child.on('error', (err) => {
             webview.postMessage({ type: 'status', message: '✗ Error running robocopy: ' + err.message });
             resolve(false);
         });
@@ -100,7 +76,7 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
 
     if (!fs.existsSync(networkPath)) {
         try {
-            await fs.promises.mkdir(networkPath, { recursive: true });
+            fs.mkdirSync(networkPath, { recursive: true });
         } catch (e: any) {
             webview.postMessage({ type: 'status', message: '✗ Cannot access or create network path. Error: ' + e.message });
             return;
@@ -132,14 +108,8 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
         const dst = path.join(networkPath, file);
         if (fs.existsSync(src)) {
             try {
-<<<<<<< HEAD
                 fs.copyFileSync(src, dst);
                 webview.postMessage({ type: 'status', message: `✓ ${file}` });
-=======
-                webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                await fs.promises.copyFile(sourcePath, destPath);
-                webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
                 successCount++;
             } catch (e) {}
         }
@@ -158,7 +128,6 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
         }
     }
 
-<<<<<<< HEAD
     // 4. 備份 Rules
     for (const file of RulesFiles) {
         const src = path.join(localRoot, file);
@@ -169,13 +138,6 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
                 successCount++;
             } catch (e) {}
         }
-=======
-    try {
-        await fs.promises.writeFile(infoPath, infoContent, 'utf-8');
-    } catch (e: any) {
-        console.error('Failed to write backup info:', e);
-        webview.postMessage({ type: 'status', message: '! Warning: Could not write backup_info.txt - ' + e.message });
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
     }
 
     webview.postMessage({ type: 'status', message: '\n==============================' });
@@ -189,18 +151,7 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
     const localRoot = getLocalGeminiRoot();
     const appDataPath = getAppDataPath();
 
-<<<<<<< HEAD
     webview.postMessage({ type: 'status', message: 'Starting Direct Restore...' });
-=======
-    if (!fs.existsSync(localPath)) {
-        try {
-            await fs.promises.mkdir(localPath, { recursive: true });
-        } catch (e: any) {
-            webview.postMessage({ type: 'status', message: '✗ Error creating local directory: ' + e.message });
-            return;
-        }
-    }
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
 
     let successCount = 0;
 
@@ -219,13 +170,7 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
         const dst = path.join(localPath, file);
         if (fs.existsSync(src)) {
             try {
-<<<<<<< HEAD
                 fs.copyFileSync(src, dst);
-=======
-                webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                await fs.promises.copyFile(sourcePath, destPath);
-                webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
->>>>>>> 174ef66ef81d5ed659007d02b20cff8c94d816b4
                 successCount++;
             } catch (e) {}
         }
