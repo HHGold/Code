@@ -28,6 +28,17 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // 自動監聽設定變更，並更新 Webview
+        const configListener = vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('antigravityBackup.networkPath')) {
+                this.updateWebviewConfig();
+            }
+        });
+
+        webviewView.onDidDispose(() => {
+            configListener.dispose();
+        });
+
         webviewView.webview.onDidReceiveMessage(data => {
             switch (data.type) {
                 case 'backup':
@@ -128,7 +139,9 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
 
                 <button id="backup-btn">Backup to Network</button>
                 <button id="restore-btn" class="restore-btn">Restore from Network</button>
-                <button id="refresh-btn" style="background-color: transparent; border: 1px solid var(--vscode-button-background); color: var(--vscode-foreground);">Refresh Config</button>
+                <div style="font-size: 11px; color: var(--vscode-errorForeground); margin-top: -10px; margin-bottom: 15px; font-weight: bold; text-align: center;">
+                    Important: You MUST close and re-open Antigravity after restore to apply lists.
+                </div>
 
                 <div class="title">Status / Logs:</div>
                 <div id="status-area">Ready.</div>
@@ -142,12 +155,8 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
                     });
 
                     document.getElementById('restore-btn').addEventListener('click', () => {
-                        document.getElementById('status-area').innerText = 'Waiting for confirmation...\\n';
+                        document.getElementById('status-area').innerText = 'Starting restore...\\n';
                         vscode.postMessage({ type: 'restore' });
-                    });
-
-                    document.getElementById('refresh-btn').addEventListener('click', () => {
-                        vscode.postMessage({ type: 'refreshConfig' });
                     });
 
                     window.addEventListener('message', event => {

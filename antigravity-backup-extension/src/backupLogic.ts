@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import * as os from 'os';
 
 const DataFolders = [
@@ -14,38 +14,52 @@ const DataFolders = [
     "global_workflows"
 ];
 
+// 需要備份的核心設定檔 (位於 .gemini/antigravity 下)
+const CoreSettingFiles = [
+    "installation_id",
+    "user_settings.pb"
+];
+
 const RulesFiles = [
     "GEMINI.md"
 ];
 
 function getLocalGeminiPath(): string {
-    const userProfile = os.homedir();
-    return path.join(userProfile, '.gemini', 'antigravity');
+    return path.join(os.homedir(), '.gemini', 'antigravity');
 }
 
 function getLocalGeminiRoot(): string {
-    const userProfile = os.homedir();
-    return path.join(userProfile, '.gemini');
+    return path.join(os.homedir(), '.gemini');
 }
 
-async function runRobocopy(source: string, dest: string, webview: vscode.Webview): Promise<boolean> {
+function getAppDataPath(): string {
+    return path.join(process.env.APPDATA || '', 'Antigravity', 'User', 'globalStorage');
+}
+
+async function runRobocopy(source: string, dest: string, webview: vscode.Webview, specificFile?: string): Promise<boolean> {
     return new Promise((resolve) => {
         if (!fs.existsSync(dest)) {
             fs.mkdirSync(dest, { recursive: true });
         }
 
-        const args = [source, dest, '/MIR', '/NP', '/NFL', '/NDL', '/NJH', '/NJS'];
+        // 優化參數：
+        // /R:0 /W:0 = 不重試 (不卡住)
+        // /NP /NFL /NDL /NJH /NJS = 靜默模式，不輸出大量文字以免緩衝區溢位
+        let args = specificFile 
+            ? [source, dest, specificFile, '/R:0', '/W:0', '/NP', '/NFL', '/NDL', '/NJH', '/NJS']
+            : [source, dest, '/MIR', '/R:0', '/W:0', '/NP', '/NFL', '/NDL', '/NJH', '/NJS'];
 
-        webview.postMessage({ type: 'status', message: 'Running robocopy for ' + path.basename(source) + '...' });
+        const command = `robocopy ${args.map(a => `"${a}"`).join(' ')}`;
+        webview.postMessage({ type: 'status', message: `Syncing ${specificFile || path.basename(source)}...` });
 
         const child = spawn('robocopy', args);
 
         child.on('close', (code) => {
-            if (code !== null && code < 8) {
-                webview.postMessage({ type: 'status', message: '✓ ' + path.basename(source) + ' completed.' });
+            // Robocopy code < 8 代表成功 (0-7 都是正常的複製成功狀態)
+            if (code !== null && code <= 7) {
                 resolve(true);
             } else {
-                webview.postMessage({ type: 'status', message: '✗ ' + path.basename(source) + ' failed with code ' + code + '.' });
+                webview.postMessage({ type: 'status', message: `! Check: ${specificFile || path.basename(source)} partial or skipped (Code ${code})` });
                 resolve(false);
             }
         });
@@ -71,117 +85,111 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
 
     const localPath = getLocalGeminiPath();
     const localRoot = getLocalGeminiRoot();
+    const appDataPath = getAppDataPath();
 
-    webview.postMessage({ type: 'status', message: 'Local Data Path: ' + localPath });
-
-    if (!fs.existsSync(localPath)) {
-        webview.postMessage({ type: 'status', message: '✗ Local Antigravity data directory not found.' });
-        return;
-    }
+    webview.postMessage({ type: 'status', message: 'Starting Direct Backup (No ZIP)...' });
 
     let successCount = 0;
 
-    webview.postMessage({ type: 'status', message: '\n--- Backing up folders ---' });
+    // 1. 備份 7 個核心目錄
+    webview.postMessage({ type: 'status', message: '\n--- Backing up Content ---' });
     for (const folder of DataFolders) {
-        const sourcePath = path.join(localPath, folder);
-        // 修正：如果網路路徑最後一個資料夾已經是該 folder 名稱，則不再拼接
-        const destPath = networkPath.toLowerCase().endsWith(folder.toLowerCase()) 
-            ? networkPath 
-            : path.join(networkPath, folder);
-
-        if (fs.existsSync(sourcePath)) {
-            const success = await runRobocopy(sourcePath, destPath, webview);
-            if (success) successCount++;
-        } else {
-            webview.postMessage({ type: 'status', message: 'Skipping ' + folder + ' (does not exist).' });
+        const src = path.join(localPath, folder);
+        const dst = path.join(networkPath, folder);
+        if (fs.existsSync(src)) {
+            if (await runRobocopy(src, dst, webview)) successCount++;
         }
     }
 
-    webview.postMessage({ type: 'status', message: '\n--- Backing up Rules ---' });
-    for (const file of RulesFiles) {
-        const sourcePath = path.join(localRoot, file);
-        const destPath = path.join(networkPath, file);
-
-        if (fs.existsSync(sourcePath)) {
+    // 2. 備份身份證明與設定
+    webview.postMessage({ type: 'status', message: '\n--- Backing up Identity ---' });
+    for (const file of CoreSettingFiles) {
+        const src = path.join(localPath, file);
+        const dst = path.join(networkPath, file);
+        if (fs.existsSync(src)) {
             try {
-                webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                fs.copyFileSync(sourcePath, destPath);
-                webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
+                fs.copyFileSync(src, dst);
+                webview.postMessage({ type: 'status', message: `✓ ${file}` });
                 successCount++;
-            } catch (err: any) {
-                webview.postMessage({ type: 'status', message: '✗ Failed to copy ' + file + ': ' + err.message });
-            }
-        } else {
-            webview.postMessage({ type: 'status', message: 'Skipping ' + file + ' (does not exist).' });
+            } catch (e) {}
         }
     }
 
-    const infoPath = path.join(networkPath, "backup_info.txt");
-    const infoContent = 'Last Backup Time: ' + new Date().toLocaleString() + '\nBackup Computer: ' + os.hostname() + '\nBackup User: ' + os.userInfo().username + '\nBackup Content: Extension backup';
+    // 3. 備份索引資料夾 (從 AppData 搬移核心索引與最近列表)
+    const appDataUserPath = path.dirname(appDataPath); // ...\Antigravity\User
+    const foldersToBackupFromAppData = ["globalStorage", "workspaceStorage", "History"];
+    
+    webview.postMessage({ type: 'status', message: '\n--- Backing up UI Index & Recents ---' });
+    for (const folder of foldersToBackupFromAppData) {
+        const src = path.join(appDataUserPath, folder);
+        const dst = path.join(networkPath, 'AppData', folder);
+        if (fs.existsSync(src)) {
+            if (await runRobocopy(src, dst, webview)) successCount++;
+        }
+    }
 
-    try {
-        fs.writeFileSync(infoPath, infoContent, 'utf-8');
-    } catch (e) { }
+    // 4. 備份 Rules
+    for (const file of RulesFiles) {
+        const src = path.join(localRoot, file);
+        const dst = path.join(networkPath, file);
+        if (fs.existsSync(src)) {
+            try {
+                fs.copyFileSync(src, dst);
+                successCount++;
+            } catch (e) {}
+        }
+    }
 
     webview.postMessage({ type: 'status', message: '\n==============================' });
-    webview.postMessage({ type: 'status', message: '✓ Backup Finished! ' + successCount + ' items processed.' });
+    webview.postMessage({ type: 'status', message: `✓ Backup Completed!` });
     webview.postMessage({ type: 'status', message: '==============================\n' });
-    vscode.window.showInformationMessage('Antigravity Backup to network completed successfully!');
+    vscode.window.showInformationMessage('Antigravity Full Backup completed!');
 }
 
 export async function runRestore(networkPath: string, webview: vscode.Webview) {
-    webview.postMessage({ type: 'status', message: 'Checking network path: ' + networkPath });
-
-    if (!fs.existsSync(networkPath)) {
-        webview.postMessage({ type: 'status', message: '✗ Cannot access network path. Ensure backup exists. ' + networkPath });
-        return;
-    }
-
     const localPath = getLocalGeminiPath();
     const localRoot = getLocalGeminiRoot();
+    const appDataPath = getAppDataPath();
 
-    if (!fs.existsSync(localPath)) {
-        fs.mkdirSync(localPath, { recursive: true });
-    }
+    webview.postMessage({ type: 'status', message: 'Starting Direct Restore...' });
 
     let successCount = 0;
 
-    webview.postMessage({ type: 'status', message: '\n--- Restoring folders ---' });
+    // 1. 還原目錄
     for (const folder of DataFolders) {
-        const sourcePath = networkPath.toLowerCase().endsWith(folder.toLowerCase()) 
-            ? networkPath 
-            : path.join(networkPath, folder);
-        const destPath = path.join(localPath, folder);
-
-        if (fs.existsSync(sourcePath)) {
-            const success = await runRobocopy(sourcePath, destPath, webview);
-            if (success) successCount++;
-        } else {
-            webview.postMessage({ type: 'status', message: 'Skipping ' + folder + ' (not in backup).' });
+        const src = path.join(networkPath, folder);
+        const dst = path.join(localPath, folder);
+        if (fs.existsSync(src)) {
+            if (await runRobocopy(src, dst, webview)) successCount++;
         }
     }
 
-    webview.postMessage({ type: 'status', message: '\n--- Restoring Rules ---' });
-    for (const file of RulesFiles) {
-        const sourcePath = path.join(networkPath, file);
-        const destPath = path.join(localRoot, file);
-
-        if (fs.existsSync(sourcePath)) {
+    // 2. 還原 Identity
+    for (const file of CoreSettingFiles) {
+        const src = path.join(networkPath, file);
+        const dst = path.join(localPath, file);
+        if (fs.existsSync(src)) {
             try {
-                webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                fs.copyFileSync(sourcePath, destPath);
-                webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
+                fs.copyFileSync(src, dst);
                 successCount++;
-            } catch (err: any) {
-                webview.postMessage({ type: 'status', message: '✗ Failed to copy ' + file + ': ' + err.message });
-            }
-        } else {
-            webview.postMessage({ type: 'status', message: 'Skipping ' + file + ' (not in backup).' });
+            } catch (e) {}
         }
+    }
+
+    // 3. 還原 UI 索引與最近列表
+    const appDataUserPath = path.dirname(appDataPath);
+    const srcAppData = path.join(networkPath, 'AppData');
+    if (fs.existsSync(srcAppData)) {
+        webview.postMessage({ type: 'status', message: '\n--- Restoring UI Index & Recents ---' });
+        if (await runRobocopy(srcAppData, appDataUserPath, webview)) successCount++;
     }
 
     webview.postMessage({ type: 'status', message: '\n==============================' });
-    webview.postMessage({ type: 'status', message: '✓ Restore Finished! ' + successCount + ' items processed.' });
+    webview.postMessage({ type: 'status', message: '✓ Restore Finished!' });
     webview.postMessage({ type: 'status', message: '==============================\n' });
-    vscode.window.showInformationMessage('Antigravity Restore from network completed successfully!');
+
+    vscode.window.showInformationMessage(
+        'Restore successful! Please CLOSE and RE-OPEN Antigravity to apply the list index.', 
+        'OK'
+    );
 }
