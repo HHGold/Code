@@ -28,10 +28,21 @@ function getLocalGeminiRoot(): string {
     return path.join(userProfile, '.gemini');
 }
 
+/**
+ * 執行 robocopy 命令進行增量備份或還原
+ * @param source 來源路徑
+ * @param dest 目標路徑
+ * @param webview 用於回傳狀態的 Webview
+ */
 async function runRobocopy(source: string, dest: string, webview: vscode.Webview): Promise<boolean> {
-    return new Promise((resolve) => {
-        if (!fs.existsSync(dest)) {
-            fs.mkdirSync(dest, { recursive: true });
+    return new Promise(async (resolve) => {
+        try {
+            if (!fs.existsSync(dest)) {
+                await fs.promises.mkdir(dest, { recursive: true });
+            }
+        } catch (err: any) {
+            webview.postMessage({ type: 'status', message: '✗ Error creating directory: ' + err.message });
+            return resolve(false);
         }
 
         const args = [source, dest, '/MIR', '/NP', '/NFL', '/NDL', '/NJH', '/NJS'];
@@ -40,7 +51,7 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
 
         const child = spawn('robocopy', args);
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
             if (code !== null && code < 8) {
                 webview.postMessage({ type: 'status', message: '✓ ' + path.basename(source) + ' completed.' });
                 resolve(true);
@@ -50,7 +61,7 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
             }
         });
 
-        child.on('error', (err) => {
+        child.on('error', (err: Error) => {
             webview.postMessage({ type: 'status', message: '✗ Error running robocopy: ' + err.message });
             resolve(false);
         });
@@ -62,7 +73,7 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
 
     if (!fs.existsSync(networkPath)) {
         try {
-            fs.mkdirSync(networkPath, { recursive: true });
+            await fs.promises.mkdir(networkPath, { recursive: true });
         } catch (e: any) {
             webview.postMessage({ type: 'status', message: '✗ Cannot access or create network path. Error: ' + e.message });
             return;
@@ -105,7 +116,7 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
         if (fs.existsSync(sourcePath)) {
             try {
                 webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                fs.copyFileSync(sourcePath, destPath);
+                await fs.promises.copyFile(sourcePath, destPath);
                 webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
                 successCount++;
             } catch (err: any) {
@@ -120,8 +131,11 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
     const infoContent = 'Last Backup Time: ' + new Date().toLocaleString() + '\nBackup Computer: ' + os.hostname() + '\nBackup User: ' + os.userInfo().username + '\nBackup Content: Extension backup';
 
     try {
-        fs.writeFileSync(infoPath, infoContent, 'utf-8');
-    } catch (e) { }
+        await fs.promises.writeFile(infoPath, infoContent, 'utf-8');
+    } catch (e: any) {
+        console.error('Failed to write backup info:', e);
+        webview.postMessage({ type: 'status', message: '! Warning: Could not write backup_info.txt - ' + e.message });
+    }
 
     webview.postMessage({ type: 'status', message: '\n==============================' });
     webview.postMessage({ type: 'status', message: '✓ Backup Finished! ' + successCount + ' items processed.' });
@@ -141,7 +155,12 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
     const localRoot = getLocalGeminiRoot();
 
     if (!fs.existsSync(localPath)) {
-        fs.mkdirSync(localPath, { recursive: true });
+        try {
+            await fs.promises.mkdir(localPath, { recursive: true });
+        } catch (e: any) {
+            webview.postMessage({ type: 'status', message: '✗ Error creating local directory: ' + e.message });
+            return;
+        }
     }
 
     let successCount = 0;
@@ -169,7 +188,7 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
         if (fs.existsSync(sourcePath)) {
             try {
                 webview.postMessage({ type: 'status', message: 'Copying ' + file + '...' });
-                fs.copyFileSync(sourcePath, destPath);
+                await fs.promises.copyFile(sourcePath, destPath);
                 webview.postMessage({ type: 'status', message: '✓ ' + file + ' completed.' });
                 successCount++;
             } catch (err: any) {
