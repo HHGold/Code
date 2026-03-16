@@ -39,13 +39,7 @@ export class BackupViewProvider implements vscode.WebviewViewProvider {
                 case 'restore':
                     {
                         const networkPath = vscode.workspace.getConfiguration('antigravityBackup').get('networkPath') as string;
-                        vscode.window.showWarningMessage('Warning: Please CLOSE the Antigravity app before restoring! Restore will overwrite your current local data. Are you sure?', 'Yes', 'No').then(selection => {
-                            if (selection === 'Yes') {
-                                runRestore(networkPath, webviewView.webview);
-                            } else {
-                                webviewView.webview.postMessage({ type: 'status', message: 'Restore cancelled.' });
-                            }
-                        });
+                        runRestore(networkPath, webviewView.webview);
                         break;
                     }
                 case 'refreshConfig':

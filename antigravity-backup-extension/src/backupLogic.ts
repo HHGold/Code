@@ -84,7 +84,10 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
     webview.postMessage({ type: 'status', message: '\n--- Backing up folders ---' });
     for (const folder of DataFolders) {
         const sourcePath = path.join(localPath, folder);
-        const destPath = path.join(networkPath, folder);
+        // 修正：如果網路路徑最後一個資料夾已經是該 folder 名稱，則不再拼接
+        const destPath = networkPath.toLowerCase().endsWith(folder.toLowerCase()) 
+            ? networkPath 
+            : path.join(networkPath, folder);
 
         if (fs.existsSync(sourcePath)) {
             const success = await runRobocopy(sourcePath, destPath, webview);
@@ -145,7 +148,9 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
 
     webview.postMessage({ type: 'status', message: '\n--- Restoring folders ---' });
     for (const folder of DataFolders) {
-        const sourcePath = path.join(networkPath, folder);
+        const sourcePath = networkPath.toLowerCase().endsWith(folder.toLowerCase()) 
+            ? networkPath 
+            : path.join(networkPath, folder);
         const destPath = path.join(localPath, folder);
 
         if (fs.existsSync(sourcePath)) {

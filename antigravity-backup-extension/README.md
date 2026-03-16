@@ -35,7 +35,6 @@ Antigravity Backup 是一個專為「Antigravity」AI 助手所設計的 VS Code
 
 ### 4. 還原 (Restore)
 當您切換到另一台電腦，或需要找回之前的對話紀錄時：
-- **重要：請先關閉 Antigravity 應用程式！** 避免檔案被鎖定。
 - 點擊 **「Restore from Network」** 按鈕。
 - 系統會將網路路徑上的所有備份資料覆蓋回目前的本機端目錄。
 - 完成後重新啟動 Antigravity 即可看到完整的歷史紀錄。
