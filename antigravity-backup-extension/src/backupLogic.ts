@@ -16,7 +16,6 @@ const DataFolders = [
 
 // 需要備份的核心設定檔 (位於 .gemini/antigravity 下)
 const CoreSettingFiles = [
-    "installation_id",
     "user_settings.pb"
 ];
 
@@ -45,7 +44,7 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
         // 優化參數：
         // /R:0 /W:0 = 不重試 (不卡住)
         // /NP /NFL /NDL /NJH /NJS = 靜默模式，不輸出大量文字以免緩衝區溢位
-        let args = specificFile 
+        let args = specificFile
             ? [source, dest, specificFile, '/R:0', '/W:0', '/NP', '/NFL', '/NDL', '/NJH', '/NJS']
             : [source, dest, '/MIR', '/R:0', '/W:0', '/NP', '/NFL', '/NDL', '/NJH', '/NJS'];
 
@@ -57,6 +56,7 @@ async function runRobocopy(source: string, dest: string, webview: vscode.Webview
         child.on('close', (code) => {
             // Robocopy code < 8 代表成功 (0-7 都是正常的複製成功狀態)
             if (code !== null && code <= 7) {
+                webview.postMessage({ type: 'status', message: `✓ ${specificFile || path.basename(source)} sync finished.` });
                 resolve(true);
             } else {
                 webview.postMessage({ type: 'status', message: `! Check: ${specificFile || path.basename(source)} partial or skipped (Code ${code})` });
@@ -111,15 +111,15 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
                 fs.copyFileSync(src, dst);
                 webview.postMessage({ type: 'status', message: `✓ ${file}` });
                 successCount++;
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
-    // 3. 備份索引資料夾 (從 AppData 搬移核心索引與最近列表)
+    // 3. 備份索引資料夾 (從 AppData 搬移最近列表與歷史)
     const appDataUserPath = path.dirname(appDataPath); // ...\Antigravity\User
-    const foldersToBackupFromAppData = ["globalStorage", "workspaceStorage", "History"];
-    
-    webview.postMessage({ type: 'status', message: '\n--- Backing up UI Index & Recents ---' });
+    const foldersToBackupFromAppData = ["workspaceStorage", "History"];
+
+    webview.postMessage({ type: 'status', message: '\n--- Backing up UI Context & History ---' });
     for (const folder of foldersToBackupFromAppData) {
         const src = path.join(appDataUserPath, folder);
         const dst = path.join(networkPath, 'AppData', folder);
@@ -136,7 +136,7 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
             try {
                 fs.copyFileSync(src, dst);
                 successCount++;
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
@@ -160,28 +160,50 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
         const src = path.join(networkPath, folder);
         const dst = path.join(localPath, folder);
         if (fs.existsSync(src)) {
-            if (await runRobocopy(src, dst, webview)) successCount++;
+            const ok = await runRobocopy(src, dst, webview);
+            if (ok) successCount++;
         }
     }
 
-    // 2. 還原 Identity
+    // 2. 還原 Identity (部分還原)
+    webview.postMessage({ type: 'status', message: '\n--- Restoring Identity (Selective) ---' });
     for (const file of CoreSettingFiles) {
+        // 1.1.13 核心修正：還原時跳過 installation_id
+        // 理由：覆蓋此 ID 會導致新電腦的插件加密金鑰錯位，造成 GitHub 等插件被強制登出
+        if (file === 'installation_id') {
+            webview.postMessage({ type: 'status', message: `- Skipped ${file} to protect machine identity.` });
+            continue;
+        }
+
         const src = path.join(networkPath, file);
         const dst = path.join(localPath, file);
         if (fs.existsSync(src)) {
             try {
                 fs.copyFileSync(src, dst);
+                webview.postMessage({ type: 'status', message: `✓ ${file}` });
                 successCount++;
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
-    // 3. 還原 UI 索引與最近列表
-    const appDataUserPath = path.dirname(appDataPath);
-    const srcAppData = path.join(networkPath, 'AppData');
-    if (fs.existsSync(srcAppData)) {
-        webview.postMessage({ type: 'status', message: '\n--- Restoring UI Index & Recents ---' });
-        if (await runRobocopy(srcAppData, appDataUserPath, webview)) successCount++;
+    // 3. 還原 UI 索引與最近列表 (安全模式：跳過 globalStorage 以免 GitHub 登出)
+    const appDataUserPath = path.dirname(appDataPath); // ...\Antigravity\User
+    const srcAppDataRoot = path.join(networkPath, 'AppData');
+
+    if (fs.existsSync(srcAppDataRoot)) {
+        webview.postMessage({ type: 'status', message: '\n--- Restoring UI Index (Safe Mode) ---' });
+        webview.postMessage({ type: 'status', message: `! Security: Skipping globalStorage to keep GitHub logged in.` });
+        
+        const foldersToRestore = ["workspaceStorage", "History"];
+        for (const folder of foldersToRestore) {
+            const src = path.join(srcAppDataRoot, folder);
+            const dst = path.join(appDataUserPath, folder);
+            
+            if (fs.existsSync(src)) {
+                // 還原專案級資料夾
+                if (await runRobocopy(src, dst, webview)) successCount++;
+            }
+        }
     }
 
     webview.postMessage({ type: 'status', message: '\n==============================' });
@@ -189,7 +211,7 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
     webview.postMessage({ type: 'status', message: '==============================\n' });
 
     vscode.window.showInformationMessage(
-        'Restore successful! Please CLOSE and RE-OPEN Antigravity to apply the list index.', 
+        'Restore successful! Please CLOSE and RE-OPEN Antigravity to apply the list index.',
         'OK'
     );
 }

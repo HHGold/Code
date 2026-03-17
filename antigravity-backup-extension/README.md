@@ -1,46 +1,69 @@
-# Antigravity Backup (v1.1.7)
+# Antigravity Backup Extension
 
-Antigravity Backup 是一款專為 Google **Antigravity** AI 助手量身打造的備份與還原工具。它能幫助您在新舊電腦之間，完美同步所有的 AI 對話紀錄、記憶檔案 (Brain) 以及首頁的最近對話清單。
-
-## 🌟 核心功能
-
-- **全方位備份 (Full State Backup)**：除了對話內容，更包含 `installation_id`、`user_settings.pb` 以及系統索引 (Index)，確保還原後的對話清單不會空白。
-- **直連鏡像同步 (Direct Mirror)**：採用優化過的 `robocopy` 引擎，即便 `brain` 資料夾有數萬個碎小檔案也能在數秒內完成同步，不再卡死。
-- **自動化設定**：移除冗餘的重新整理按鈕，面板會自動監聽並即時顯示最新的備份路徑。
-- **影子還原技術**：即便在 IDE 運行中也能嘗試抓取關鍵快照，並於還原後提供顯眼的重啟提醒。
-
-## 📁 備份範疇
-
-本工具會保護以下關鍵數據：
-1. **對話內容 (`.gemini/antigravity/`)**：包含 `conversations`、`brain`、`knowledge`、`annotations` 等 7 個核心目錄。
-2. **身份識別**：`installation_id` 與 `user_settings`，讓新電腦能「繼承」舊電腦的對話權限。
-3. **UI 索引 (`AppData/Roaming/Antigravity/User/`)**：備份 `globalStorage` (總書目)、`workspaceStorage` (首頁最近對話清單) 以及 `History` (指令歷史)。
-4. **全域規則**：`GEMINI.md` 等自訂開發規則。
-
-## ⚙️ 擴充套件設定
-
-* `antigravityBackup.networkPath`: 備份目的地路徑 (例如：`\\gy\share\Antigravity\Backup`)。
-  * *建議設置在穩定的 NAS 或雲端同步資料夾。*
-
-## 🚀 如何使用
-
-### 1. 備份 (Backup)
-當您在舊電腦完成重要開發後：
-- 打開側邊欄 **Antigravity Backup** 面板。
-- 確認顯示的路徑正確。
-- 點擊 **「Backup to Network」**。
-- 狀態欄顯示 `✓ Backup Completed!` 即代表成功。
-
-### 2. 還原 (Restore)
-在新電腦安裝此擴充套件並設定相同路徑後：
-- 點擊 **「Restore from Network」**。
-- 等待狀態欄顯示 `✓ Restore Finished!`。
-- **[重要]**：點擊彈出視窗的 OK，然後 **「完全關閉 Antigravity 軟體並重新啟動」**。這是讓對話清單出現在首頁的必要步驟。
-
-## ⚠️ 注意事項
-
-- **手動重啟**：Antigravity 1.20+ 版本的索引緩存非常深，單純的 `Reload Window` 無法刷新清單，還原後請務必手動重開軟體。
-- **檔案鎖定**：如果備份時出現警告，建議先關閉 Antigravity 主視窗後再執行一次備份以讀取最完整的索引快照。
+[English](#english) | [繁體中文](#繁體中文)
 
 ---
-Developed by HHGold. Designed for peak productivity with Antigravity AI.
+
+<a name="english"></a>
+## English Description
+
+This extension provides a simple and efficient way to backup and restore your Antigravity (VS Code based) settings, conversations, and workspace context to/from a network path.
+
+### Features
+- **Direct Mirroring (v1.1.x)**: Uses Windows `robocopy` for fast folder mirroring without the overhead of ZIP compression.
+- **Login Protection**: Specifically designed to backup your data *without* overriding your GitHub/Google login tokens on the target machine.
+- **UI Context Preservation**: Syncs `workspaceStorage` and `History` to keep your "Recent Conversations" and "Command History" intact.
+- **Auto Configuration**: Automatically detects settings changes and updates the UI real-time.
+
+### What is Backed Up?
+- **Content**: All `.pb` conversation files, brain (indexing) data, knowledge items, and global workflows.
+- **Identity**: Core user settings (`user_settings.pb`).
+- **UI Context**: Workspace states (`workspaceStorage`) and command history.
+
+### What is EXCLUDED? (Privacy & Stability)
+- **`installation_id`**: Not restored to keep each machine's unique identity.
+- **`globalStorage`**: Excluded to protect your login tokens (GitHub/Google) from being overwritten.
+
+### Usage
+1. Open the **Antigravity Backup** view in the sidebar.
+2. Configure your `Network Path` in VS Code Settings (`antigravityBackup.networkPath`).
+3. Click **Backup to Network** to sync your data.
+4. Click **Restore from Network** to recover your data.
+   - *Note: Close and re-open Antigravity after restore.*
+
+---
+
+<a name="繁體中文"></a>
+## 繁體中文說明
+
+此套件提供簡單且高效的方式，讓您可以將 Antigravity (基於 VS Code) 的設定、對話紀錄與工作區上下文備份到網路路徑，或從中還原。
+
+### 核心功能
+- **直連鏡像 (v1.1.x)**： 使用 Windows `robocopy` 進行快速資料夾鏡像，免除 ZIP 壓縮帶來的效能損耗。
+- **登入保護**： 特別優化還原邏輯，**不會**覆蓋目標電腦的 GitHub/Google 登入權杖 (Token)。
+- **保留 UI 上下文**： 同步 `workspaceStorage` 與 `History`，確保「最近對話清單」與「指令歷史」在還原後依然存在。
+- **自動更新設定**： 即時偵測路徑變更並更新介面顯示。
+
+### 備份範圍
+- **對話內容**： 所有的 `.pb` 對話檔、Brain (索引數據)、知識庫 (Knowledge) 與全域工作流。
+- **身份設定**： 核心使用者設定檔 (`user_settings.pb`)。
+- **UI 狀態**： 工作區狀態快取 (`workspaceStorage`) 與輸入歷史紀錄。
+
+### 排除項目 (隱私與穩定性)
+- **`installation_id`**： 還原時主動跳過，以保留每台電腦唯一的機器身份。
+- **`globalStorage`**： 不進行還原以保護您的 GitHub/Google 登入狀態不被登出。
+
+### 使用方法
+1. 開啟側邊欄的 **Antigravity Backup** 面板。
+2. 在設定中配置您的備份路徑 (`antigravityBackup.networkPath`)。
+3. 點擊 **Backup to Network** 進行備份。
+4. 點擊 **Restore from Network** 進行還原。
+   - *注意：還原完成後，請務必重啟 Antigravity 以載入最新索引。*
+
+---
+### Release Notes / 更新日誌 (1.1.15)
+- **English**: Lightweight sync. Removed `globalStorage` from backup to avoid file locking and protect login tokens.
+- **中文**: 輕量化同步。移除 `globalStorage` 備份以避免檔案鎖定問題，並確保 GitHub 登入狀態不被干擾。
+
+---
+Created by HHGold
