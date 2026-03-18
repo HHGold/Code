@@ -186,13 +186,27 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
         }
     }
 
+    // 2. 還原 Rules
+    webview.postMessage({ type: 'status', message: '\n--- Restoring Rules ---' });
+    for (const file of RulesFiles) {
+        const src = path.join(networkPath, file);
+        const dst = path.join(localRoot, file);
+        if (fs.existsSync(src)) {
+            try {
+                fs.copyFileSync(src, dst);
+                webview.postMessage({ type: 'status', message: `✓ ${file}` });
+                successCount++;
+            } catch (e) { }
+        }
+    }
+
+
     // 3. 還原 UI 索引與最近列表 (安全模式：跳過 globalStorage 以免 GitHub 登出)
     const appDataUserPath = path.dirname(appDataPath); // ...\Antigravity\User
     const srcAppDataRoot = path.join(networkPath, 'AppData');
 
     if (fs.existsSync(srcAppDataRoot)) {
         webview.postMessage({ type: 'status', message: '\n--- Restoring UI Index (Safe Mode) ---' });
-        webview.postMessage({ type: 'status', message: `! Security: Skipping globalStorage to keep GitHub logged in.` });
         
         const foldersToRestore = ["workspaceStorage", "History"];
         for (const folder of foldersToRestore) {

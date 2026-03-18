@@ -16,7 +16,7 @@ This extension provides a simple and efficient way to backup and restore your An
 - **Auto Configuration**: Automatically detects settings changes and updates the UI real-time.
 
 ### What is Backed Up?
-- **Content**: All `.pb` conversation files, brain (indexing) data, knowledge items, and global workflows.
+- **Content**: All `.pb` conversation files, brain (indexing) data, knowledge items, global workflows, and **`GEMINI.md` (Rules)**.
 - **Identity**: Core user settings (`user_settings.pb`).
 - **UI Context**: Workspace states (`workspaceStorage`) and command history.
 
@@ -45,7 +45,7 @@ This extension provides a simple and efficient way to backup and restore your An
 - **自動更新設定**： 即時偵測路徑變更並更新介面顯示。
 
 ### 備份範圍
-- **對話內容**： 所有的 `.pb` 對話檔、Brain (索引數據)、知識庫 (Knowledge) 與全域工作流。
+- **對話內容**： 所有的 `.pb` 對話檔、Brain (索引數據)、知識庫 (Knowledge)、全域工作流以及 **`GEMINI.md` (全域規則)**。
 - **身份設定**： 核心使用者設定檔 (`user_settings.pb`)。
 - **UI 狀態**： 工作區狀態快取 (`workspaceStorage`) 與輸入歷史紀錄。
 
@@ -61,9 +61,15 @@ This extension provides a simple and efficient way to backup and restore your An
    - *注意：還原完成後，請務必重啟 Antigravity 以載入最新索引。*
 
 ---
+### Release Notes / 更新日誌 (1.1.16)
+- **English**: Fixed restoration of `GEMINI.md` (Rules). Cleaned up redundant logs in restore process.
+- **中文**: 修正 `GEMINI.md` (全域規則) 的還原邏輯。優化還原過程中的 Log 顯示（移除冗餘跳過提示）。
+
+---
 ### Release Notes / 更新日誌 (1.1.15)
 - **English**: Lightweight sync. Removed `globalStorage` from backup to avoid file locking and protect login tokens.
 - **中文**: 輕量化同步。移除 `globalStorage` 備份以避免檔案鎖定問題，並確保 GitHub 登入狀態不被干擾。
+
 
 ---
 Created by HHGold
