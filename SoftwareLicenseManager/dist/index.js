@@ -32,7 +32,8 @@ if (notificationProvider instanceof LineNotificationProvider_1.LineNotificationP
     console.log(`[Config] Line Token Length: ${process.env.LINE_TOKEN?.length}`);
 }
 const addLicenseUseCase = new AddLicense_1.AddLicense(licenseRepo);
-const checkExpiringUseCase = new CheckExpiringLicenses_1.CheckExpiringLicenses(licenseRepo, notificationProvider, 7);
+const expiryDays = parseInt(process.env.EXPIRY_DAYS || '15', 10);
+const checkExpiringUseCase = new CheckExpiringLicenses_1.CheckExpiringLicenses(licenseRepo, notificationProvider, expiryDays);
 const licenseController = new LicenseController_1.LicenseController(addLicenseUseCase, licenseRepo);
 // Routes (以 /slm/api 為起始路徑)
 const apiRouter = express_1.default.Router();
@@ -43,11 +44,11 @@ apiRouter.delete('/licenses/:id', (req, res) => licenseController.deleteLicense(
 // 測試用：手動觸發到期檢查
 apiRouter.post('/check', async (req, res) => {
     try {
-        console.log('[API] 手動啟動到期檢查請求已收到...');
-        const expiringLicenses = await licenseRepo.getExpiringLicenses(7);
+        console.log(`[API] 手動啟動到期檢查請求已收到... (檢查範圍: ${expiryDays} 天)`);
+        const expiringLicenses = await licenseRepo.getExpiringLicenses(expiryDays);
         console.log(`[API] 發現 ${expiringLicenses.length} 筆待通知授權`);
         await checkExpiringUseCase.execute();
-        res.json({ success: true, message: '到期檢查已完成' });
+        res.json({ success: true, message: `到期檢查已完成 (範圍: ${expiryDays} 天)` });
     }
     catch (e) {
         console.error('[API Error] 手動檢查失敗:', e.message);

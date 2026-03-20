@@ -1,15 +1,344 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/slm/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-    <script type="module" crossorigin src="/slm/assets/index-BHrR5Pw-.js"></script>
-    <link rel="stylesheet" crossorigin href="/slm/assets/index-CucHigAU.css">
-  </head>
-  <body>
-    <div id="root"></div>
-    <div id="root-portal"></div>
-  </body>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Software License Manager</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: rgba(22, 27, 34, 0.7);
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --primary-color: #58a6ff;
+            --danger-color: #f85149;
+            --success-color: #2ea043;
+            --warning-color: #d29922;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        h1, h2 { color: #fff; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        
+        .header-title {
+            background: linear-gradient(45deg, var(--primary-color), #bc8cff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2rem;
+            font-weight: 800;
+        }
+
+        /* 表單設計 */
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        label { color: var(--text-muted); font-size: 0.875rem; }
+        input {
+            background: #010409;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+        input:focus { border-color: var(--primary-color); outline: none; }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 4px; }
+        .btn-quick {
+            background: #21262d; border: 1px solid var(--border-color);
+            color: var(--text-main); font-size: 0.75rem; padding: 4px 8px;
+            border-radius: 6px; cursor: pointer;
+        }
+        .btn-quick:hover { background: #30363d; }
+
+        .form-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+        .btn-submit {
+            background: var(--primary-color); color: #000; border: none;
+            padding: 10px 24px; border-radius: 8px; font-weight: 700; cursor: pointer;
+        }
+        .btn-submit:disabled { background: #30363d; color: var(--text-muted); cursor: not-allowed; }
+
+        /* 表格設計 */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: var(--text-muted); padding: 12px; border-bottom: 1px solid var(--border-color); }
+        td { padding: 14px 12px; border-bottom: 1px solid #21262d; }
+        
+        .badge {
+            padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+        }
+        .badge-success { color: var(--success-color); background: rgba(46, 160, 67, 0.15); border: 1px solid rgba(46, 160, 67, 0.4); }
+        .badge-danger { color: var(--danger-color); background: rgba(248, 81, 73, 0.15); border: 1px solid rgba(248, 81, 73, 0.4); }
+        .badge-warning { color: var(--warning-color); background: rgba(210, 153, 34, 0.15); border: 1px solid rgba(210, 153, 34, 0.4); }
+
+        .action-btns { display: flex; gap: 8px; }
+        .btn-icon {
+            background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);
+            padding: 6px; border-radius: 6px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-icon:hover { color: #fff; background: var(--border-color); }
+        .btn-delete:hover { border-color: var(--danger-color); color: var(--danger-color); }
+
+        /* 手機 RWD 卡片化 */
+        @media (max-width: 600px) {
+            body { padding: 10px 8px; }
+            .form-row { grid-template-columns: 1fr; }
+            .header-title { font-size: 1.4rem; justify-content: center; text-align: center; }
+            
+            thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; }
+            tr { border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.02); overflow: hidden; }
+            td { border: none !important; border-bottom: 1px solid rgba(255,255,255,0.03) !important; padding: 8px 0 8px 35% !important; position: relative; display: flex; align-items: center; min-height: 28px; font-size: 0.9rem; word-break: break-all; }
+            td:last-child { border: none !important; justify-content: flex-end; padding-left: 0 !important; margin-top: 10px; }
+            td::before {
+                content: attr(data-label);
+                position: absolute; left: 0; width: 32%; color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="header-title">📋 軟體授權管理系統</h1>
+        </header>
+
+        <!-- 新增/編輯表單 -->
+        <div class="glass-panel">
+            <h2 id="form-title">➕ 新增授權紀錄</h2>
+            <form id="license-form">
+                <input type="hidden" id="license-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>客戶名稱</label>
+                        <input type="text" id="clientName" placeholder="例如：某某科技有限公司" required>
+                    </div>
+                    <div class="form-group">
+                        <label>軟體 / 產品名稱</label>
+                        <input type="text" id="softwareName" placeholder="例如：Microsoft 365" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>購買日期</label>
+                        <input type="date" id="purchaseDate" onclick="try { this.showPicker(); } catch(e) {}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>到期日期</label>
+                        <input type="date" id="expiryDate" onclick="try { this.showPicker(); } catch(e) {}" required>
+                        <div class="btn-group">
+                            <button type="button" class="btn-quick" onclick="adjustYear(1)">+1年</button>
+                            <button type="button" class="btn-quick" onclick="adjustYear(2)">+2年</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancel-btn" style="display:none; background:none; border:none; color:var(--text-muted); cursor:pointer; margin-right:15px;" onclick="resetForm()">取消編輯</button>
+                    <button type="submit" class="btn-submit" id="submit-btn" disabled>儲存授權</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 列表顯示 -->
+        <div class="glass-panel">
+            <h2>📜 已記錄的授權清單</h2>
+            <div id="loading-text" style="color:var(--text-muted); text-align:center; padding:20px;">資料載入中...</div>
+            <div style="overflow-x: auto;">
+                <table id="license-table" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>客戶名稱</th>
+                            <th>軟體名稱</th>
+                            <th>購買日期</th>
+                            <th>到期日期</th>
+                            <th>狀態</th>
+                            <th style="text-align: right;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="license-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/slm/api';
+        let licenses = [];
+
+        // 初始化
+        window.onload = () => {
+            fetchLicenses();
+            document.getElementById('license-form').addEventListener('submit', handleFormSubmit);
+            document.getElementById('purchaseDate').addEventListener('change', () => { checkSubmitBtn(); });
+            document.getElementById('clientName').addEventListener('input', checkSubmitBtn);
+            document.getElementById('softwareName').addEventListener('input', checkSubmitBtn);
+            document.getElementById('expiryDate').addEventListener('change', checkSubmitBtn);
+        };
+
+        function checkSubmitBtn() {
+            const form = document.getElementById('license-form');
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = !form.checkValidity();
+        }
+
+        async function fetchLicenses() {
+            try {
+                const res = await fetch(`${API_BASE}/licenses`);
+                const json = await res.json();
+                licenses = json.data;
+                renderTable();
+            } catch (err) {
+                console.error("載入失敗", err);
+                document.getElementById('loading-text').innerText = "載入失敗，請檢查後端連線。";
+            }
+        }
+
+        function renderTable() {
+            const list = document.getElementById('license-list');
+            list.innerHTML = '';
+            document.getElementById('loading-text').style.display = 'none';
+            document.getElementById('license-table').style.display = 'table';
+
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            const warningDays = 15; // 您設定的通知天數
+            const warningLimit = new Date();
+            warningLimit.setDate(today.getDate() + warningDays);
+
+            licenses.sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate)).forEach(l => {
+                const expiry = new Date(l.expiryDate);
+                expiry.setHours(0,0,0,0);
+                
+                let badgeClass = 'badge-success';
+                let statusText = '使用中';
+
+                if (expiry < today) {
+                    badgeClass = 'badge-danger';
+                    statusText = '已過期';
+                } else if (expiry <= warningLimit) {
+                    badgeClass = 'badge-warning';
+                    statusText = '即將到期';
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td data-label="客戶名稱">${l.clientName || '<span style="color:var(--text-muted)">未定義</span>'}</td>
+                    <td data-label="軟體名稱">${l.softwareName || '<span style="color:var(--text-muted)">未定義</span>'}</td>
+                    <td data-label="購買日期">${l.purchaseDate}</td>
+                    <td data-label="到期日期">${l.expiryDate}</td>
+                    <td data-label="目前狀態"><span class="badge ${badgeClass}">${statusText}</span></td>
+                    <td style="text-align: right;">
+                        <div class="action-btns" style="justify-content: flex-end;">
+                            <button class="btn-icon" onclick="editLicense(${l.id})" title="編輯">✏️</button>
+                            <button class="btn-icon btn-delete" onclick="deleteLicense(${l.id})" title="刪除">🗑️</button>
+                        </div>
+                    </td>
+                `;
+                list.appendChild(tr);
+            });
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('license-id').value;
+            const payload = {
+                clientName: document.getElementById('clientName').value,
+                softwareName: document.getElementById('softwareName').value,
+                purchaseDate: document.getElementById('purchaseDate').value,
+                expiryDate: document.getElementById('expiryDate').value,
+                notified: false 
+            };
+
+            try {
+                const url = id ? `${API_BASE}/licenses/${id}` : `${API_BASE}/licenses`;
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if(res.ok) {
+                    resetForm();
+                    fetchLicenses();
+                } else {
+                    alert("操作失敗");
+                }
+            } catch (err) {
+                alert("儲存失敗");
+            }
+        }
+
+        function editLicense(id) {
+            const l = licenses.find(x => x.id === id);
+            if (!l) return;
+            document.getElementById('form-title').innerText = "✏️ 編輯授權紀錄";
+            document.getElementById('license-id').value = l.id;
+            document.getElementById('clientName').value = l.clientName;
+            document.getElementById('softwareName').value = l.softwareName;
+            document.getElementById('purchaseDate').value = l.purchaseDate;
+            document.getElementById('expiryDate').value = l.expiryDate;
+            document.getElementById('cancel-btn').style.display = 'inline-block';
+            document.getElementById('submit-btn').innerText = "更新授權";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            checkSubmitBtn();
+        }
+
+        async function deleteLicense(id) {
+            if (!confirm("確定要刪除這筆紀錄嗎？")) return;
+            try {
+                await fetch(`${API_BASE}/licenses/${id}`, { method: 'DELETE' });
+                fetchLicenses();
+            } catch (err) { alert("刪除失敗"); }
+        }
+
+        function resetForm() {
+            document.getElementById('license-form').reset();
+            document.getElementById('license-id').value = '';
+            document.getElementById('form-title').innerText = "➕ 新增授權紀錄";
+            document.getElementById('submit-btn').innerText = "儲存授權";
+            document.getElementById('cancel-btn').style.display = 'none';
+            checkSubmitBtn();
+        }
+
+        function adjustYear(years) {
+            const pDate = document.getElementById('purchaseDate').value;
+            if (!pDate) return;
+            const date = new Date(pDate);
+            date.setFullYear(date.getFullYear() + years);
+            document.getElementById('expiryDate').value = date.toISOString().split('T')[0];
+            checkSubmitBtn();
+        }
+    </script>
+</body>
 </html>
