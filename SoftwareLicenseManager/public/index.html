@@ -69,8 +69,11 @@
             padding: 10px 14px;
             border-radius: 8px;
             font-size: 1rem;
+            height: 45px;
+            line-height: normal;
             transition: border-color 0.2s;
             cursor: pointer;
+            width: 100%;
         }
         input:focus { border-color: var(--primary-color); outline: none; }
 
@@ -198,7 +201,12 @@
         // 初始化
         window.onload = () => {
             fetchLicenses();
-            document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('purchaseDate').value = todayStr;
+            const nextYear = new Date();
+            nextYear.setFullYear(nextYear.getFullYear() + 1);
+            document.getElementById('expiryDate').value = nextYear.toISOString().split('T')[0];
+            
             document.getElementById('license-form').addEventListener('submit', handleFormSubmit);
             document.getElementById('purchaseDate').addEventListener('change', () => { checkSubmitBtn(); });
             document.getElementById('clientName').addEventListener('input', checkSubmitBtn);
@@ -327,7 +335,12 @@
         function resetForm() {
             document.getElementById('license-form').reset();
             document.getElementById('license-id').value = '';
-            document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('purchaseDate').value = todayStr;
+            const nextYear = new Date();
+            nextYear.setFullYear(nextYear.getFullYear() + 1);
+            document.getElementById('expiryDate').value = nextYear.toISOString().split('T')[0];
+
             document.getElementById('form-title').innerText = "➕ 新增授權紀錄";
             document.getElementById('submit-btn').innerText = "儲存授權";
             document.getElementById('cancel-btn').style.display = 'none';
