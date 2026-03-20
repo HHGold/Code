@@ -198,11 +198,13 @@
         // 初始化
         window.onload = () => {
             fetchLicenses();
+            document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('license-form').addEventListener('submit', handleFormSubmit);
             document.getElementById('purchaseDate').addEventListener('change', () => { checkSubmitBtn(); });
             document.getElementById('clientName').addEventListener('input', checkSubmitBtn);
             document.getElementById('softwareName').addEventListener('input', checkSubmitBtn);
             document.getElementById('expiryDate').addEventListener('change', checkSubmitBtn);
+            checkSubmitBtn();
         };
 
         function checkSubmitBtn() {
@@ -325,6 +327,7 @@
         function resetForm() {
             document.getElementById('license-form').reset();
             document.getElementById('license-id').value = '';
+            document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('form-title').innerText = "➕ 新增授權紀錄";
             document.getElementById('submit-btn').innerText = "儲存授權";
             document.getElementById('cancel-btn').style.display = 'none';
