@@ -174,7 +174,10 @@
 
         <!-- 列表顯示 -->
         <div class="glass-panel">
-            <h2>📜 已記錄的授權清單</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">📜 已記錄的授權清單</h2>
+                <button type="button" class="btn-quick" style="padding: 8px 16px; font-weight: 600; color: var(--primary-color); border-color: var(--primary-color);" onclick="sendTestNotification()">🔔 測試發送通知</button>
+            </div>
             <div id="loading-text" style="color:var(--text-muted); text-align:center; padding:20px;">資料載入中...</div>
             <div style="overflow-x: auto;">
                 <table id="license-table" style="display: none;">
@@ -330,6 +333,28 @@
                 await fetch(`${API_BASE}/licenses/${id}`, { method: 'DELETE' });
                 fetchLicenses();
             } catch (err) { alert("刪除失敗"); }
+        }
+
+        async function sendTestNotification() {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "發送中...";
+            try {
+                const res = await fetch(`${API_BASE}/check`, { method: 'POST' });
+                const json = await res.json();
+                if (json.success) {
+                    alert("通知發送完成！\n" + (json.message || "系統已處理符合條件的紀錄。"));
+                } else {
+                    alert("發送失敗: " + json.error);
+                }
+            } catch (err) {
+                alert("連線失敗，請檢查網路或伺服器。");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                fetchLicenses(); // 重新刷資料，因為 notified 可能改變
+            }
         }
 
         function resetForm() {
