@@ -128,7 +128,22 @@ export async function runBackup(networkPath: string, webview: vscode.Webview) {
         }
     }
 
-    // 4. 備份 Rules
+    // 4. 備份 state.vscdb（對話列表索引資料庫）
+    // 注意：Antigravity 執行中時此檔案可能被鎖定，使用 robocopy /B (backup mode) 繞過
+    webview.postMessage({ type: 'status', message: '\n--- Backing up Conversation Index (state.vscdb) ---' });
+    const globalStorageSrc = path.join(appDataUserPath, 'globalStorage');
+    const globalStorageDst = path.join(networkPath, 'AppData', 'globalStorage');
+    const stateDbFile = 'state.vscdb';
+    if (fs.existsSync(path.join(globalStorageSrc, stateDbFile))) {
+        // 使用 robocopy /B 備份模式，可繞過執行中程式的檔案鎖定
+        if (await runRobocopy(globalStorageSrc, globalStorageDst, webview, stateDbFile)) {
+            successCount++;
+        }
+    } else {
+        webview.postMessage({ type: 'status', message: `- state.vscdb not found, skipped.` });
+    }
+
+    // 5. 備份 Rules
     for (const file of RulesFiles) {
         const src = path.join(localRoot, file);
         const dst = path.join(networkPath, file);
@@ -217,6 +232,39 @@ export async function runRestore(networkPath: string, webview: vscode.Webview) {
                 // 還原專案級資料夾
                 if (await runRobocopy(src, dst, webview)) successCount++;
             }
+        }
+
+        // 4. 還原 state.vscdb（對話列表索引資料庫）
+        // 重要：Antigravity 執行中時此檔案被鎖定，無法直接覆蓋。
+        // 策略：先複製為 .restore-pending，關閉 Antigravity 後再手動改名。
+        webview.postMessage({ type: 'status', message: '\n--- Restoring Conversation Index (state.vscdb) ---' });
+        const srcStateDb = path.join(srcAppDataRoot, 'globalStorage', 'state.vscdb');
+        const dstGlobalStorage = path.join(appDataUserPath, 'globalStorage');
+        const dstStateDb = path.join(dstGlobalStorage, 'state.vscdb');
+        const dstPending = path.join(dstGlobalStorage, 'state.vscdb.restore-pending');
+
+        if (fs.existsSync(srcStateDb)) {
+            try {
+                // 嘗試直接覆蓋（若 Antigravity 已關閉則會成功）
+                fs.copyFileSync(srcStateDb, dstStateDb);
+                webview.postMessage({ type: 'status', message: '✓ state.vscdb restored directly.' });
+                successCount++;
+            } catch (e: any) {
+                // 若被鎖定，存為 .restore-pending 並提示使用者手動處理
+                try {
+                    fs.copyFileSync(srcStateDb, dstPending);
+                    webview.postMessage({ type: 'status', message: '⚠ state.vscdb is locked (Antigravity is running).' });
+                    webview.postMessage({ type: 'status', message: '  → Saved as state.vscdb.restore-pending' });
+                    webview.postMessage({ type: 'status', message: '  → After closing Antigravity, run in Explorer:' });
+                    webview.postMessage({ type: 'status', message: `  → Rename: ${dstPending}` });
+                    webview.postMessage({ type: 'status', message: `  →      to: ${dstStateDb}` });
+                } catch (e2: any) {
+                    webview.postMessage({ type: 'status', message: `✗ Cannot restore state.vscdb: ${e2.message}` });
+                }
+            }
+        } else {
+            webview.postMessage({ type: 'status', message: '- state.vscdb backup not found, skipped.' });
+            webview.postMessage({ type: 'status', message: '  (Run a Backup first to create it)' });
         }
     }
 

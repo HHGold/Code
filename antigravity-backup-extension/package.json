@@ -1,61 +1,63 @@
 {
-  "publisher": "HHGold",
-  "name": "antigravity-backup",
-  "displayName": "Antigravity Backup",
-  "description": "Backup and restore Antigravity settings and conversations.",
-  "version": "1.1.16",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/HHGold/antigravity-backup-extension.git"
-  },
-  "engines": {
-    "vscode": "^1.90.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "antigravityBackupExplorer",
-          "title": "Antigravity Backup",
-          "icon": "media/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "antigravityBackupExplorer": [
-        {
-          "type": "webview",
-          "id": "antigravityBackupView",
-          "name": "Backup / Restore"
-        }
-      ]
-    },
-    "configuration": {
-      "title": "Antigravity Backup",
-      "properties": {
-        "antigravityBackup.networkPath": {
-          "type": "string",
-          "default": "\\\\gy\\share\\Antigravity\\Conversations",
-          "description": "Network path to backup Antigravity data."
-        }
-      }
-    }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package --no-dependencies"
-  },
-  "devDependencies": {
-    "@types/node": "^20.x",
-    "@types/vscode": "^1.90.0",
-    "@vscode/vsce": "^3.0.0",
-    "typescript": "^5.9.3"
-  }
+    "publisher":  "HHGold",
+    "name":  "antigravity-backup",
+    "displayName":  "Antigravity Backup",
+    "description":  "Backup and restore Antigravity settings and conversations.",
+    "version":  "1.1.17",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "https://github.com/HHGold/antigravity-backup-extension.git"
+                   },
+    "engines":  {
+                    "vscode":  "^1.90.0"
+                },
+    "categories":  [
+                       "Other"
+                   ],
+    "activationEvents":  [
+
+                         ],
+    "main":  "./out/extension.js",
+    "contributes":  {
+                        "viewsContainers":  {
+                                                "activitybar":  [
+                                                                    {
+                                                                        "id":  "antigravityBackupExplorer",
+                                                                        "title":  "Antigravity Backup",
+                                                                        "icon":  "media/icon.svg"
+                                                                    }
+                                                                ]
+                                            },
+                        "views":  {
+                                      "antigravityBackupExplorer":  [
+                                                                        {
+                                                                            "type":  "webview",
+                                                                            "id":  "antigravityBackupView",
+                                                                            "name":  "Backup / Restore"
+                                                                        }
+                                                                    ]
+                                  },
+                        "configuration":  {
+                                              "title":  "Antigravity Backup",
+                                              "properties":  {
+                                                                 "antigravityBackup.networkPath":  {
+                                                                                                       "type":  "string",
+                                                                                                       "default":  "\\\\gy\\share\\Antigravity\\Conversations",
+                                                                                                       "description":  "Network path to backup Antigravity data."
+                                                                                                   }
+                                                             }
+                                          }
+                    },
+    "scripts":  {
+                    "vscode:prepublish":  "npm run compile",
+                    "compile":  "tsc -p ./",
+                    "watch":  "tsc -watch -p ./",
+                    "package":  "vsce package --no-dependencies"
+                },
+    "devDependencies":  {
+                            "@types/node":  "^20.x",
+                            "@types/vscode":  "^1.90.0",
+                            "@vscode/vsce":  "^3.0.0",
+                            "typescript":  "^5.9.3"
+                        }
 }
