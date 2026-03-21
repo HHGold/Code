@@ -13,14 +13,18 @@ class LineNotificationProvider {
     }
     async notifyExpiringLicense(license) {
         try {
-            const clientName = license.clientName || license.customerName || '未指定客戶';
-            const softwareName = license.softwareName || '未指定軟體';
+            // 提供多種可能的屬性名稱作為備援
+            const clientName = license.clientName || license.client_name || license.customerName || license.customer_name || '未指定客戶';
+            const softwareName = license.softwareName || license.software_name || '未指定軟體';
+            
             const message = {
                 type: 'text',
                 text: `⚠️ 軟體授權即將到期提醒！\n\n客戶: ${clientName}\n軟體: ${softwareName}\n購買日期: ${license.purchaseDate}\n到期日期: ${license.expiryDate}\n\n請務必於到期前進行續約。`
             };
             await this.client.pushMessage(this.toUserId, message);
             console.log(`[LINE] 已發送通知給 ${this.toUserId} - 客戶: ${clientName}`);
+            // 若為 Debug 用，可以解開下方註解輸出整個物件結構
+            // console.log(`[Debug] License Object: ${JSON.stringify(license)}`);
         }
         catch (error) {
             console.error('[LINE Error] 通知發送失敗:', error.response?.data || error.message);
